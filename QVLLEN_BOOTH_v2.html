@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QVLLEN BOOTH</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #1a1a1f;
+  --bg-deep: #111114;
+  --surface: #222228;
+  --surface2: #2a2a32;
+  --surface3: #33333d;
+  --border: #3a3a45;
+  --border-light: #4a4a58;
+  
+  --fl-orange: #ff6d00;
+  --fl-orange-dim: rgba(255,109,0,0.15);
+  --fl-orange-glow: rgba(255,109,0,0.4);
+  --rec-red: #ff2d2d;
+  --rec-red-dim: rgba(255,45,45,0.12);
+  --rec-red-glow: rgba(255,45,45,0.5);
+  --green: #4caf50;
+  --green-dim: rgba(76,175,80,0.12);
+  --green-bright: #69f0ae;
+  --blue: #42a5f5;
+  --yellow: #ffca28;
+  --cyan: #26c6da;
+  
+  --text: #e4e4ea;
+  --text2: #9898a8;
+  --text3: #666678;
+  --text4: #44444f;
+  
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+html, body { 
+  height:100%; overflow:hidden; 
+  background:var(--bg-deep); color:var(--text);
+  font-family:'Outfit',sans-serif;
+  touch-action:manipulation;
+}
+
+/* ─── SPLASH / INIT SCREEN ─── */
+#splashScreen {
+  position:fixed; inset:0; z-index:200;
+  background:var(--bg-deep);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:24px;
+  transition:opacity .5s, visibility .5s;
+}
+#splashScreen.hide { opacity:0; visibility:hidden; pointer-events:none; }
+.splash-logo { font-family:'Bebas Neue'; font-size:48px; letter-spacing:6px; color:var(--fl-orange); }
+.splash-logo span { color:var(--text3); font-size:28px; }
+.splash-sub { color:var(--text3); font-size:13px; letter-spacing:1px; }
+.splash-btn {
+  width:200px; height:56px; border-radius:28px; border:none;
+  background:var(--fl-orange); color:#fff; font-family:'Outfit';
+  font-size:16px; font-weight:600; letter-spacing:1px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  box-shadow:0 4px 24px var(--fl-orange-glow);
+  transition:transform .15s;
+}
+.splash-btn:active { transform:scale(0.95); }
+.splash-status { font-family:'IBM Plex Mono'; font-size:11px; color:var(--text3); min-height:16px; }
+
+/* ─── APP SHELL ─── */
+#app { display:flex; flex-direction:column; height:100%; }
+
+/* ─── HEADER BAR (FL style) ─── */
+.header {
+  display:flex; align-items:center; height:44px; padding:0 12px;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  flex-shrink:0; gap:10px;
+}
+.h-logo { font-family:'Bebas Neue'; font-size:18px; letter-spacing:3px; color:var(--fl-orange); }
+.h-logo span { color:var(--text3); font-size:12px; margin-left:2px; }
+.h-spacer { flex:1; }
+.h-indicator {
+  display:flex; align-items:center; gap:5px;
+  font-family:'IBM Plex Mono'; font-size:10px; color:var(--text3);
+}
+.h-dot { width:6px; height:6px; border-radius:50%; background:var(--text4); flex-shrink:0; }
+.h-dot.on { background:var(--green-bright); box-shadow:0 0 6px var(--green); }
+.h-btn {
+  width:32px; height:32px; border-radius:6px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text2); display:flex;
+  align-items:center; justify-content:center; font-size:14px; cursor:pointer;
+}
+.h-btn:active { background:var(--surface3); }
+
+/* ─── MAIN AREA ─── */
+.main-area {
+  flex:1; display:flex; flex-direction:column; overflow:hidden;
+}
+
+/* ─── BEAT BAR ─── */
+.beat-bar {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; background:var(--bg);
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  flex-shrink:0;
+}
+.beat-upload {
+  height:34px; padding:0 14px; border-radius:6px;
+  border:1.5px dashed var(--border); background:transparent;
+  color:var(--text2); font-family:'Outfit'; font-size:12px;
+  font-weight:500; cursor:pointer; white-space:nowrap;
+  display:flex; align-items:center; gap:5px;
+  transition:all .2s;
+}
+.beat-upload.loaded { border-style:solid; border-color:var(--fl-orange); color:var(--fl-orange); }
+.beat-upload:active { background:var(--surface); }
+.beat-name-display {
+  flex:1; font-family:'IBM Plex Mono'; font-size:11px;
+  color:var(--text3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.beat-vol-mini {
+  width:60px; height:3px; -webkit-appearance:none; appearance:none;
+  background:var(--surface3); border-radius:2px; outline:none;
+}
+.beat-vol-mini::-webkit-slider-thumb {
+  -webkit-appearance:none; width:12px; height:12px; border-radius:50%;
+  background:var(--fl-orange); border:2px solid var(--bg-deep);
+}
+
+/* ─── TIMELINE RULER ─── */
+.timeline-ruler {
+  height:22px; background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:relative; flex-shrink:0; overflow:hidden;
+}
+.ruler-canvas { width:100%; height:100%; }
+
+/* ─── TAKE LANES (FL Playlist style) ─── */
+.take-lanes {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  background:var(--bg-deep); position:relative;
+}
+.take-lanes::-webkit-scrollbar { display:none; }
+
+.take-lane {
+  display:flex; height:64px; border-bottom:1px solid rgba(255,255,255,0.03);
+  position:relative; transition:background .2s;
+}
+.take-lane:active { background:rgba(255,255,255,0.02); }
+.take-lane.selected { background:var(--fl-orange-dim); }
+.take-lane.recording { background:var(--rec-red-dim); }
+.take-lane.playing { background:var(--green-dim); }
+
+.lane-header {
+  width:56px; flex-shrink:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px;
+  background:var(--surface); border-right:1px solid var(--border);
+  position:relative;
+}
+.lane-num {
+  font-family:'Bebas Neue'; font-size:20px; color:var(--text3);
+  line-height:1;
+}
+.take-lane.selected .lane-num { color:var(--fl-orange); }
+.take-lane.recording .lane-num { color:var(--rec-red); }
+.take-lane.playing .lane-num { color:var(--green-bright); }
+
+.lane-status {
+  font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4);
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+.take-lane.recording .lane-status { color:var(--rec-red); }
+
+.lane-body {
+  flex:1; position:relative; overflow:hidden;
+}
+.lane-waveform {
+  position:absolute; inset:0;
+}
+.lane-waveform canvas { width:100%; height:100%; }
+
+.lane-empty {
+  position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:11px; color:var(--text4);
+}
+
+.lane-duration {
+  position:absolute; right:6px; bottom:4px;
+  font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3);
+  background:rgba(17,17,20,0.7); padding:1px 5px; border-radius:3px;
+}
+
+/* Recording animation stripe */
+.take-lane.recording .lane-body::after {
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    -45deg, transparent, transparent 4px,
+    rgba(255,45,45,0.06) 4px, rgba(255,45,45,0.06) 8px
+  );
+  animation:rec-stripe 1s linear infinite;
+}
+@keyframes rec-stripe { to { background-position:11px 0; } }
+
+/* Playhead */
+.playhead {
+  position:absolute; top:0; bottom:0; width:2px;
+  background:var(--fl-orange); z-index:10;
+  pointer-events:none; left:0; display:none;
+  box-shadow:0 0 8px var(--fl-orange-glow);
+}
+.playhead::before {
+  content:''; position:absolute; top:-1px; left:-4px;
+  width:10px; height:4px; background:var(--fl-orange);
+  border-radius:0 0 2px 2px;
+}
+
+/* ─── CROSSFADE INDICATOR ─── */
+.crossfade-bar {
+  display:flex; align-items:center; height:32px; padding:0 12px;
+  background:var(--surface); border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border); gap:6px; flex-shrink:0;
+}
+.cf-label { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+.cf-btn {
+  height:22px; padding:0 10px; border-radius:4px; border:1px solid var(--border);
+  background:transparent; color:var(--text3); font-family:'IBM Plex Mono';
+  font-size:9px; font-weight:500; cursor:pointer; letter-spacing:0.5px;
+  transition:all .15s;
+}
+.cf-btn.active { border-color:var(--cyan); color:var(--cyan); background:rgba(38,198,218,0.1); }
+.cf-btn:active { transform:scale(0.95); }
+.cf-spacer { flex:1; }
+.cf-time {
+  font-family:'IBM Plex Mono'; font-size:10px; color:var(--text3);
+  display:flex; align-items:center; gap:4px;
+}
+.cf-time input {
+  width:44px; height:20px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:3px; color:var(--cyan); font-family:'IBM Plex Mono'; font-size:10px;
+  text-align:center; outline:none;
+}
+
+/* ─── INPUT METER ─── */
+.input-meter-bar {
+  height:14px; padding:0 12px; background:var(--bg);
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+}
+.meter-label { font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4); letter-spacing:1px; min-width:26px; }
+.meter-track { flex:1; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; position:relative; }
+.meter-fill { height:100%; width:0%; border-radius:2px; background:linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--rec-red) 95%); transition:width 60ms; }
+.meter-db { font-family:'IBM Plex Mono'; font-size:8px; color:var(--text3); min-width:38px; text-align:right; }
+
+/* ─── TRANSPORT BAR (FL style bottom bar) ─── */
+.transport {
+  display:flex; align-items:center; height:72px; padding:0 10px;
+  background:linear-gradient(180deg, var(--surface) 0%, var(--surface2) 100%);
+  border-top:1px solid var(--border-light);
+  flex-shrink:0; gap:6px;
+}
+
+.t-btn {
+  width:40px; height:40px; border-radius:8px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text2); font-size:16px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:all .15s; flex-shrink:0;
+}
+.t-btn:active { transform:scale(0.92); background:var(--surface3); }
+.t-btn.active { color:var(--text); background:var(--surface3); }
+
+/* Record button — FL style */
+.t-rec {
+  width:52px; height:52px; border-radius:50%;
+  border:3px solid var(--rec-red); background:transparent;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; position:relative; flex-shrink:0;
+  transition:all .2s;
+}
+.t-rec:active { transform:scale(0.9); }
+.t-rec-dot {
+  width:22px; height:22px; border-radius:50%;
+  background:var(--rec-red); transition:all .2s;
+}
+.t-rec.recording { 
+  background:var(--rec-red); border-color:var(--rec-red);
+  box-shadow:0 0 24px var(--rec-red-glow);
+}
+.t-rec.recording .t-rec-dot { 
+  width:16px; height:16px; border-radius:3px; background:#fff; 
+}
+
+.t-timer {
+  font-family:'IBM Plex Mono'; font-size:22px; font-weight:600;
+  color:var(--text); letter-spacing:1px; min-width:72px;
+  text-align:center; flex-shrink:0;
+}
+.t-timer.recording { color:var(--rec-red); }
+
+.t-info {
+  flex:1; display:flex; flex-direction:column; gap:1px;
+  min-width:0; padding:0 4px;
+}
+.t-info-main { font-size:12px; font-weight:500; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.t-info-sub { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); }
+
+.t-actions {
+  display:flex; gap:4px; flex-shrink:0;
+}
+.t-act {
+  width:36px; height:36px; border-radius:6px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text3); font-size:14px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.t-act:active { background:var(--surface3); }
+.t-act.export-act { border-color:rgba(76,175,80,0.3); color:var(--green); }
+.t-act.del-act { border-color:rgba(255,45,45,0.2); color:var(--rec-red); }
+
+/* ─── BOTTOM DRAWER (FX / Settings) ─── */
+.drawer-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.7);
+  z-index:100; opacity:0; visibility:hidden; transition:all .3s;
+}
+.drawer-overlay.show { opacity:1; visibility:visible; }
+.drawer {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-radius:16px 16px 0 0;
+  max-height:75vh; overflow-y:auto; z-index:101;
+  transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,.0,1);
+  padding:16px;
+}
+.drawer.show { transform:translateY(0); }
+.drawer::-webkit-scrollbar { display:none; }
+.drawer-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 14px; }
+.drawer-title { font-family:'Bebas Neue'; font-size:18px; letter-spacing:2px; color:var(--text2); margin-bottom:12px; }
+
+/* FX Grid */
+.fx-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.fx-card {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:10px;
+}
+.fx-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.fx-name { font-size:11px; font-weight:600; color:var(--text2); }
+.fx-sw {
+  width:32px; height:16px; border-radius:8px; border:none;
+  background:var(--surface3); cursor:pointer; position:relative;
+  transition:all .2s;
+}
+.fx-sw.on { background:var(--fl-orange); }
+.fx-sw::after {
+  content:''; position:absolute; top:2px; left:2px;
+  width:12px; height:12px; border-radius:50%; background:#fff;
+  transition:all .2s;
+}
+.fx-sw.on::after { left:18px; }
+.fx-range {
+  width:100%; height:3px; -webkit-appearance:none;
+  background:var(--surface3); border-radius:2px; outline:none;
+}
+.fx-range::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+  background:var(--text2); border:2px solid var(--bg-deep);
+}
+.fx-val { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); text-align:center; margin-top:3px; }
+
+/* Settings rows */
+.s-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.s-label { font-size:12px; color:var(--text2); }
+.s-desc { font-size:10px; color:var(--text4); margin-top:1px; }
+.s-select {
+  height:30px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; color:var(--text); font-family:'IBM Plex Mono';
+  font-size:11px; padding:0 8px; outline:none;
+}
+.s-input {
+  width:60px; height:30px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; color:var(--fl-orange); font-family:'IBM Plex Mono';
+  font-size:11px; text-align:center; outline:none;
+}
+
+.hidden { display:none !important; }
+::-webkit-scrollbar { width:0; height:0; }
+</style>
+</head>
+<body>
+
+<!-- ═══ SPLASH ═══ -->
+<div id="splashScreen">
+  <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO</div>
+  <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
+  <div class="splash-status" id="splashStatus"></div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div id="app" style="display:none;">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="h-logo">QB <span>v2</span></div>
+    <div class="h-spacer"></div>
+    <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
+    <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
+    <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
+    <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
+  </div>
+
+  <div class="main-area">
+    <!-- BEAT BAR -->
+    <div class="beat-bar">
+      <button class="beat-upload" id="beatBtn" onclick="document.getElementById('beatFile').click()">
+        ＋ Beat
+      </button>
+      <input type="file" id="beatFile" accept="audio/*" class="hidden" onchange="loadBeat(event)">
+      <div class="beat-name-display" id="beatLabel">Beat yükle →</div>
+      <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" oninput="E.beatGain.gain.value=this.value/100">
+    </div>
+
+    <!-- TIMELINE RULER -->
+    <div class="timeline-ruler">
+      <canvas class="ruler-canvas" id="rulerCanvas"></canvas>
+    </div>
+
+    <!-- TAKE LANES -->
+    <div class="take-lanes" id="takeLanes">
+      <div class="playhead" id="playhead"></div>
+      <!-- JS renders lanes -->
+    </div>
+
+    <!-- CROSSFADE BAR -->
+    <div class="crossfade-bar">
+      <span class="cf-label">GEÇIŞ</span>
+      <button class="cf-btn active" id="cfCut" onclick="setCf('cut')">CUT</button>
+      <button class="cf-btn" id="cfXfade" onclick="setCf('xfade')">XFADE</button>
+      <button class="cf-btn" id="cfPunch" onclick="setCf('punch')">PUNCH</button>
+      <div class="cf-spacer"></div>
+      <div class="cf-time">
+        <input type="number" value="120" id="cfMs" min="0" max="999">
+        <span>ms</span>
+      </div>
+    </div>
+
+    <!-- INPUT METER -->
+    <div class="input-meter-bar">
+      <span class="meter-label">IN</span>
+      <div class="meter-track"><div class="meter-fill" id="meterFill"></div></div>
+      <span class="meter-db" id="meterDb">-∞ dB</span>
+    </div>
+  </div>
+
+  <!-- TRANSPORT BAR -->
+  <div class="transport">
+    <button class="t-btn" id="tBeatPlay" onclick="toggleBeat()">▶</button>
+    <button class="t-btn" id="tStop" onclick="stopAll()">■</button>
+    <button class="t-rec" id="tRec" onclick="toggleRec()">
+      <div class="t-rec-dot"></div>
+    </button>
+    <div class="t-timer" id="tTimer">0:00</div>
+    <div class="t-info">
+      <div class="t-info-main" id="tInfoMain">Hazır</div>
+      <div class="t-info-sub" id="tInfoSub">Take 1/10</div>
+    </div>
+    <div class="t-actions">
+      <button class="t-act" onclick="playSelected()" title="Dinle">▶</button>
+      <button class="t-act del-act" onclick="deleteSelected()" title="Sil">✕</button>
+      <button class="t-act export-act" onclick="exportMix()" title="İndir">↓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DRAWER OVERLAY ═══ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<!-- ═══ FX DRAWER ═══ -->
+<div class="drawer" id="fxDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">VOCAL FX</div>
+  <div class="fx-grid" id="fxGrid"></div>
+  <div style="margin-top:12px;">
+    <div class="drawer-title">MİXER</div>
+    <div class="s-row">
+      <span class="s-label">Vokal Volume</span>
+      <input type="range" class="fx-range" style="width:120px" min="0" max="150" value="100" id="vocalVol">
+    </div>
+    <div class="s-row">
+      <span class="s-label">Monitor Volume</span>
+      <input type="range" class="fx-range" style="width:120px" min="0" max="100" value="0" id="monitorVol" oninput="E.monitorGain&&(E.monitorGain.gain.value=this.value/100)">
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS DRAWER ═══ -->
+<div class="drawer" id="settingsDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">AYARLAR</div>
+  <div class="s-row">
+    <div><div class="s-label">Beat Çıkışı</div><div class="s-desc">Kulaklık / BT seç</div></div>
+    <select class="s-select" id="selOutput" onchange="setOutput(this.value)"></select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Mikrofon</div><div class="s-desc">Ahize / cihaz seç</div></div>
+    <select class="s-select" id="selInput" onchange="setInput(this.value)"></select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">BT Latency (ms)</div><div class="s-desc">Kulaklık gecikme telafisi</div></div>
+    <input class="s-input" type="number" value="150" id="latComp">
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Pre-Roll</div><div class="s-desc">Sayım vuruşu</div></div>
+    <select class="s-select" id="preRoll">
+      <option value="0">Yok</option>
+      <option value="2">2</option>
+      <option value="4" selected>4</option>
+      <option value="8">8</option>
+    </select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">BPM</div></div>
+    <input class="s-input" type="number" value="140" id="bpmInput" min="40" max="300">
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Sample Rate</div></div>
+    <select class="s-select" id="srSelect">
+      <option value="44100">44.1k</option>
+      <option value="48000" selected>48k</option>
+    </select>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:8px;">
+    <button class="t-act export-act" style="flex:1;height:40px;border-radius:8px;font-size:12px;" onclick="exportAllTakes()">📦 Tüm Takes İndir</button>
+    <button class="t-act export-act" style="flex:1;height:40px;border-radius:8px;font-size:12px;border-color:rgba(66,165,245,0.3);color:var(--blue);" onclick="exportMix()">🎵 Mix WAV</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// QVLLEN BOOTH v2 — FL Studio-inspired Mobile Rap Studio
+// ════════════════════════════════════════════════════════════════
+
+const MAX_TAKES = 10;
+
+// Engine state
+const E = {
+  ctx: null,
+  beatBuf: null, beatSrc: null, beatGain: null,
+  beatPlaying: false, beatStart: 0, beatOffset: 0,
+  
+  micStream: null, micSrc: null, micGain: null,
+  monitorGain: null, analyser: null,
+  
+  // FX
+  compressor: null, eq: null, reverb: null, reverbSend: null,
+  delay: null, delaySend: null, delayFb: null, gate: null,
+  hpf: null,
+  
+  recorder: null, recording: false, recChunks: [],
+  recStart: 0,
+  
+  takes: [], // {blob, buffer, duration}
+  selected: 0,
+  playingTake: -1, takeSrc: null,
+  
+  cfMode: 'cut',
+  
+  // Crossfade engine
+  pendingCf: null,
+};
+
+// FX definitions
+const FX_DEFS = [
+  { id:'comp', name:'Compressor', min:0, max:100, val:40, unit:'%' },
+  { id:'eq',   name:'EQ Presence', min:-12, max:12, val:3, unit:'dB' },
+  { id:'reverb', name:'Reverb', min:0, max:100, val:15, unit:'%' },
+  { id:'delay', name:'Delay', min:0, max:100, val:10, unit:'%' },
+  { id:'hpf', name:'Hi-Pass', min:20, max:400, val:80, unit:'Hz' },
+  { id:'gate', name:'Noise Gate', min:-80, max:-20, val:-50, unit:'dB' },
+];
+const fxState = {};
+FX_DEFS.forEach(f => fxState[f.id] = { on: false, val: f.val });
+
+// ═══ INIT ═══
+async function initAll() {
+  const btn = document.getElementById('splashBtn');
+  const status = document.getElementById('splashStatus');
+  btn.textContent = '⏳ Başlatılıyor...';
+  btn.style.pointerEvents = 'none';
+  
+  try {
+    // 1. Audio context
+    status.textContent = 'Audio engine başlatılıyor...';
+    E.ctx = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: parseInt(document.getElementById('srSelect').value)
+    });
+    if (E.ctx.state === 'suspended') await E.ctx.resume();
+    
+    // 2. Mic
+    status.textContent = 'Mikrofon bağlanıyor...';
+    await initMic();
+    
+    // 3. Init FX chain
+    status.textContent = 'FX engine kuruluyor...';
+    initFX();
+    buildFXChain();
+    
+    // 4. Devices
+    status.textContent = 'Cihazlar taranıyor...';
+    await enumDevices();
+    
+    // 5. Wake lock
+    if ('wakeLock' in navigator) {
+      try { await navigator.wakeLock.request('screen'); } catch(e){}
+    }
+    
+    // 6. Build UI
+    renderFXGrid();
+    renderLanes();
+    drawRuler();
+    startMeter();
+    
+    // Show app
+    document.getElementById('splashScreen').classList.add('hide');
+    document.getElementById('app').style.display = 'flex';
+    
+    status.textContent = 'Hazır!';
+    
+  } catch(err) {
+    status.textContent = '❌ ' + err.message;
+    btn.textContent = '🔄 Tekrar Dene';
+    btn.style.pointerEvents = 'auto';
+    console.error(err);
+  }
+}
+
+async function initMic(deviceId) {
+  if (E.micStream) E.micStream.getTracks().forEach(t => t.stop());
+  
+  E.micStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: true,
+      sampleRate: parseInt(document.getElementById('srSelect').value),
+    }
+  });
+  
+  E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
+  document.getElementById('micDot').classList.add('on');
+}
+
+function initFX() {
+  const c = E.ctx;
+  
+  E.beatGain = c.createGain();
+  E.beatGain.gain.value = 0.8;
+  E.beatGain.connect(c.destination);
+  
+  E.micGain = c.createGain();
+  E.micGain.gain.value = 1.0;
+  
+  E.compressor = c.createDynamicsCompressor();
+  E.compressor.threshold.value = -24;
+  E.compressor.knee.value = 10;
+  E.compressor.ratio.value = 4;
+  E.compressor.attack.value = 0.003;
+  E.compressor.release.value = 0.15;
+  
+  E.eq = c.createBiquadFilter();
+  E.eq.type = 'peaking';
+  E.eq.frequency.value = 4000;
+  E.eq.Q.value = 1.5;
+  E.eq.gain.value = 3;
+  
+  E.hpf = c.createBiquadFilter();
+  E.hpf.type = 'highpass';
+  E.hpf.frequency.value = 80;
+  E.hpf.Q.value = 0.7;
+  
+  // Reverb IR
+  const irLen = c.sampleRate * 1.5;
+  const irBuf = c.createBuffer(2, irLen, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = irBuf.getChannelData(ch);
+    for (let i = 0; i < irLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/irLen, 2.5);
+  }
+  E.reverb = c.createConvolver();
+  E.reverb.buffer = irBuf;
+  E.reverbSend = c.createGain();
+  E.reverbSend.gain.value = 0;
+  
+  // Delay
+  E.delay = c.createDelay(1);
+  E.delay.delayTime.value = 0.22;
+  E.delaySend = c.createGain();
+  E.delaySend.gain.value = 0;
+  E.delayFb = c.createGain();
+  E.delayFb.gain.value = 0.3;
+  E.delay.connect(E.delayFb);
+  E.delayFb.connect(E.delay);
+  E.delay.connect(E.delaySend);
+  
+  // Gate
+  E.gate = c.createDynamicsCompressor();
+  E.gate.threshold.value = -50;
+  E.gate.knee.value = 0;
+  E.gate.ratio.value = 20;
+  E.gate.attack.value = 0.001;
+  E.gate.release.value = 0.05;
+  
+  E.analyser = c.createAnalyser();
+  E.analyser.fftSize = 2048;
+  
+  E.monitorGain = c.createGain();
+  E.monitorGain.gain.value = 0;
+  E.monitorGain.connect(c.destination);
+}
+
+function buildFXChain() {
+  // Disconnect everything first
+  try { E.micSrc.disconnect(); } catch(e){}
+  try { E.micGain.disconnect(); } catch(e){}
+  try { E.hpf.disconnect(); } catch(e){}
+  try { E.gate.disconnect(); } catch(e){}
+  try { E.compressor.disconnect(); } catch(e){}
+  try { E.eq.disconnect(); } catch(e){}
+  try { E.analyser.disconnect(); } catch(e){}
+  try { E.reverb.disconnect(); } catch(e){}
+  try { E.reverbSend.disconnect(); } catch(e){}
+  try { E.delaySend.disconnect(); } catch(e){}
+  
+  // Chain: micSrc → micGain → [hpf] → [gate] → [comp] → [eq] → analyser → monitor
+  let node = E.micSrc;
+  node.connect(E.micGain);
+  node = E.micGain;
+  
+  if (fxState.hpf.on) { node.connect(E.hpf); node = E.hpf; }
+  if (fxState.gate.on) { node.connect(E.gate); node = E.gate; }
+  if (fxState.comp.on) { node.connect(E.compressor); node = E.compressor; }
+  if (fxState.eq.on) { node.connect(E.eq); node = E.eq; }
+  
+  node.connect(E.analyser);
+  E.analyser.connect(E.monitorGain);
+  
+  // Sends
+  if (fxState.reverb.on) {
+    E.analyser.connect(E.reverb);
+    E.reverb.connect(E.reverbSend);
+    E.reverbSend.connect(E.monitorGain);
+  }
+  if (fxState.delay.on) {
+    E.analyser.connect(E.delay);
+    E.delaySend.connect(E.monitorGain);
+  }
+}
+
+// ═══ DEVICES ═══
+async function enumDevices() {
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const oSel = document.getElementById('selOutput');
+  const iSel = document.getElementById('selInput');
+  
+  oSel.innerHTML = '<option value="default">Varsayılan</option>';
+  iSel.innerHTML = '<option value="default">Varsayılan</option>';
+  
+  let hasBT = false;
+  devs.forEach(d => {
+    if (d.kind === 'audiooutput') {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      const label = d.label || 'Çıkış ' + oSel.options.length;
+      o.textContent = (d.label && (d.label.includes('Bluetooth')||d.label.includes('BT')||d.label.includes('JBL'))) ? '🎧 '+label : label;
+      if (d.label && d.label.includes('JBL')) { hasBT = true; o.selected = true; }
+      oSel.appendChild(o);
+    }
+    if (d.kind === 'audioinput') {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      o.textContent = d.label || 'Mikrofon ' + iSel.options.length;
+      iSel.appendChild(o);
+    }
+  });
+  
+  document.getElementById('btDot').classList.toggle('on', hasBT);
+  if (hasBT) setOutput(oSel.value);
+}
+
+async function setOutput(id) {
+  // setSinkId may not work on all mobile browsers, but we try
+  E.outputId = id;
+}
+
+async function setInput(id) {
+  await initMic(id);
+  buildFXChain();
+}
+
+// ═══ BEAT ═══
+async function loadBeat(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const ab = await file.arrayBuffer();
+  E.beatBuf = await E.ctx.decodeAudioData(ab);
+  
+  const name = file.name.replace(/\.[^.]+$/,'');
+  document.getElementById('beatLabel').textContent = name;
+  document.getElementById('beatBtn').classList.add('loaded');
+  document.getElementById('beatBtn').innerHTML = '♫ Beat';
+  
+  drawRuler();
+}
+
+function toggleBeat() {
+  if (!E.beatBuf) return;
+  E.beatPlaying ? stopBeat() : playBeat();
+}
+
+function playBeat(offset) {
+  if (!E.beatBuf) return;
+  if (E.ctx.state === 'suspended') E.ctx.resume();
+  
+  E.beatSrc = E.ctx.createBufferSource();
+  E.beatSrc.buffer = E.beatBuf;
+  E.beatSrc.loop = true;
+  E.beatSrc.connect(E.beatGain);
+  
+  const o = offset ?? E.beatOffset;
+  E.beatSrc.start(0, o);
+  E.beatStart = E.ctx.currentTime - o;
+  E.beatPlaying = true;
+  
+  document.getElementById('tBeatPlay').textContent = '⏸';
+  document.getElementById('tBeatPlay').classList.add('active');
+}
+
+function stopBeat() {
+  if (E.beatSrc) {
+    E.beatOffset = (E.ctx.currentTime - E.beatStart) % (E.beatBuf?.duration || 1);
+    E.beatSrc.stop();
+    E.beatSrc = null;
+  }
+  E.beatPlaying = false;
+  document.getElementById('tBeatPlay').textContent = '▶';
+  document.getElementById('tBeatPlay').classList.remove('active');
+}
+
+function stopAll() {
+  if (E.recording) stopRec();
+  stopBeat();
+  stopTakePlayback();
+  E.beatOffset = 0;
+  document.getElementById('tTimer').textContent = '0:00';
+  document.getElementById('tTimer').classList.remove('recording');
+  document.getElementById('tInfoMain').textContent = 'Durduruldu';
+  hidePlayhead();
+}
+
+// ═══ RECORDING ═══
+async function toggleRec() {
+  E.recording ? stopRec() : startRec();
+}
+
+async function startRec() {
+  if (E.takes.length >= MAX_TAKES) {
+    document.getElementById('tInfoMain').textContent = '⚠ Max 10 take!';
+    return;
+  }
+  
+  // Pre-roll
+  const pr = parseInt(document.getElementById('preRoll').value);
+  if (pr > 0) await doPreRoll(pr);
+  
+  // Auto-play beat
+  if (E.beatBuf && !E.beatPlaying) playBeat(0);
+  
+  // Recorder
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+    ? 'audio/webm;codecs=opus' : 'audio/webm';
+  E.recorder = new MediaRecorder(E.micStream, { mimeType: mime });
+  E.recChunks = [];
+  
+  E.recorder.ondataavailable = e => { if (e.data.size > 0) E.recChunks.push(e.data); };
+  E.recorder.onstop = () => finishTake(mime);
+  
+  E.recorder.start(100);
+  E.recording = true;
+  E.recStart = Date.now();
+  
+  // UI
+  document.getElementById('tRec').classList.add('recording');
+  document.getElementById('tTimer').classList.add('recording');
+  document.getElementById('tInfoMain').textContent = '● REC — Take ' + (E.takes.length + 1);
+  
+  updateRecTimer();
+  renderLanes();
+}
+
+function stopRec() {
+  if (E.recorder?.state !== 'inactive') E.recorder.stop();
+  E.recording = false;
+  
+  document.getElementById('tRec').classList.remove('recording');
+  document.getElementById('tTimer').classList.remove('recording');
+}
+
+async function doPreRoll(beats) {
+  const bpm = parseInt(document.getElementById('bpmInput').value);
+  const interval = 60000 / bpm;
+  
+  document.getElementById('tInfoMain').textContent = 'Sayım...';
+  
+  for (let i = beats; i > 0; i--) {
+    document.getElementById('tTimer').textContent = '' + i;
+    // Metronome tick
+    const osc = E.ctx.createOscillator();
+    const g = E.ctx.createGain();
+    osc.frequency.value = i === 1 ? 1200 : 880;
+    g.gain.value = 0.12;
+    g.gain.exponentialRampToValueAtTime(0.001, E.ctx.currentTime + 0.08);
+    osc.connect(g).connect(E.ctx.destination);
+    osc.start(); osc.stop(E.ctx.currentTime + 0.08);
+    await sleep(interval);
+  }
+}
+
+function finishTake(mime) {
+  const blob = new Blob(E.recChunks, { type: mime });
+  const dur = (Date.now() - E.recStart) / 1000;
+  const idx = E.takes.length;
+  
+  E.takes.push({ blob, buffer: null, duration: dur });
+  
+  // Decode async
+  blob.arrayBuffer().then(ab => {
+    E.ctx.decodeAudioData(ab).then(buf => {
+      E.takes[idx].buffer = buf;
+      E.takes[idx].duration = buf.duration;
+      drawLaneWaveform(idx);
+    });
+  });
+  
+  E.selected = idx;
+  renderLanes();
+  updateInfo();
+  document.getElementById('tInfoMain').textContent = '✓ Take ' + (idx + 1) + ' kaydedildi';
+}
+
+function updateRecTimer() {
+  if (!E.recording) return;
+  const s = (Date.now() - E.recStart) / 1000;
+  document.getElementById('tTimer').textContent = fmtTime(s);
+  requestAnimationFrame(updateRecTimer);
+}
+
+// ═══ TAKE LANES ═══
+function renderLanes() {
+  const container = document.getElementById('takeLanes');
+  container.innerHTML = '<div class="playhead" id="playhead"></div>';
+  
+  for (let i = 0; i < MAX_TAKES; i++) {
+    const lane = document.createElement('div');
+    lane.className = 'take-lane';
+    if (i === E.selected) lane.classList.add('selected');
+    if (E.recording && i === E.takes.length) lane.classList.add('recording');
+    if (i === E.playingTake) lane.classList.add('playing');
+    
+    // Header
+    const hdr = document.createElement('div');
+    hdr.className = 'lane-header';
+    hdr.innerHTML = `
+      <div class="lane-num">${i + 1}</div>
+      <div class="lane-status">${i < E.takes.length ? fmtTime(E.takes[i].duration) : (E.recording && i === E.takes.length ? 'REC' : '')}</div>
+    `;
+    
+    // Body
+    const body = document.createElement('div');
+    body.className = 'lane-body';
+    
+    if (i < E.takes.length) {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'lane-waveform';
+      cvs.id = 'laneCanvas' + i;
+      body.appendChild(cvs);
+      
+      const dur = document.createElement('div');
+      dur.className = 'lane-duration';
+      dur.textContent = fmtTime(E.takes[i].duration);
+      body.appendChild(dur);
+      
+      // Draw after render
+      requestAnimationFrame(() => drawLaneWaveform(i));
+    } else if (!(E.recording && i === E.takes.length)) {
+      const empty = document.createElement('div');
+      empty.className = 'lane-empty';
+      empty.textContent = '—';
+      body.appendChild(empty);
+    } else {
+      // Recording lane — live viz
+      const cvs = document.createElement('canvas');
+      cvs.className = 'lane-waveform';
+      cvs.id = 'liveCanvas';
+      body.appendChild(cvs);
+      requestAnimationFrame(() => startLiveViz());
+    }
+    
+    lane.appendChild(hdr);
+    lane.appendChild(body);
+    
+    // Tap to select
+    lane.addEventListener('click', () => {
+      if (i < E.takes.length) { E.selected = i; renderLanes(); updateInfo(); }
+    });
+    
+    // Double-tap to play
+    let lastTap = 0;
+    lane.addEventListener('touchend', (ev) => {
+      const now = Date.now();
+      if (now - lastTap < 300 && i < E.takes.length) {
+        ev.preventDefault();
+        playTakeWithTransition(i);
+      }
+      lastTap = now;
+    });
+    
+    container.appendChild(lane);
+  }
+  
+  document.getElementById('tInfoSub').textContent = `Take ${E.selected + 1}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+}
+
+function drawLaneWaveform(idx) {
+  const cvs = document.getElementById('laneCanvas' + idx);
+  if (!cvs || !E.takes[idx]?.buffer) return;
+  
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cvs.parentElement.getBoundingClientRect();
+  cvs.width = rect.width * dpr;
+  cvs.height = rect.height * dpr;
+  cvs.style.width = rect.width + 'px';
+  cvs.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+  
+  const w = rect.width, h = rect.height;
+  const data = E.takes[idx].buffer.getChannelData(0);
+  const step = Math.ceil(data.length / w);
+  
+  // Gradient fill
+  const isSelected = idx === E.selected;
+  const color = isSelected ? 'rgba(255,109,0,' : 'rgba(76,175,80,';
+  
+  ctx.clearRect(0, 0, w, h);
+  
+  // Waveform bars style (FL-like)
+  ctx.fillStyle = color + '0.6)';
+  
+  for (let i = 0; i < w; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[i * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const yTop = ((1 - max) / 2) * h;
+    const yBot = ((1 - min) / 2) * h;
+    ctx.fillRect(i, yTop, 1, yBot - yTop);
+  }
+  
+  // Center line
+  ctx.strokeStyle = color + '0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, h/2);
+  ctx.lineTo(w, h/2);
+  ctx.stroke();
+}
+
+function startLiveViz() {
+  const cvs = document.getElementById('liveCanvas');
+  if (!cvs || !E.analyser) return;
+  
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cvs.parentElement.getBoundingClientRect();
+  cvs.width = rect.width * dpr;
+  cvs.height = rect.height * dpr;
+  cvs.style.width = rect.width + 'px';
+  cvs.style.height = rect.height + 'px';
+  ctx.scale(dpr, dpr);
+  
+  const w = rect.width, h = rect.height;
+  const bufLen = E.analyser.frequencyBinCount;
+  const arr = new Uint8Array(bufLen);
+  
+  function draw() {
+    if (!E.recording) return;
+    E.analyser.getByteTimeDomainData(arr);
+    
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255,45,45,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    
+    const slice = w / bufLen;
+    for (let i = 0; i < bufLen; i++) {
+      const y = (arr[i] / 128) * (h / 2);
+      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * slice, y);
+    }
+    ctx.stroke();
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ═══ TAKE PLAYBACK WITH TRANSITIONS ═══
+function playSelected() {
+  if (E.selected < 0 || E.selected >= E.takes.length) return;
+  playTakeWithTransition(E.selected);
+}
+
+function playTakeWithTransition(idx) {
+  if (!E.takes[idx]?.buffer) return;
+  
+  const cfMs = parseInt(document.getElementById('cfMs').value) || 0;
+  const cfSec = cfMs / 1000;
+  const mode = E.cfMode;
+  const c = E.ctx;
+  const now = c.currentTime;
+  
+  // If already playing a take, apply transition
+  if (E.takeSrc && E.playingTake >= 0) {
+    const oldGain = E.takeGain;
+    
+    if (mode === 'xfade' && cfSec > 0) {
+      // ── CROSSFADE: old fades out, new fades in ──
+      oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+      oldGain.gain.linearRampToValueAtTime(0, now + cfSec);
+      setTimeout(() => { try { E.takeSrc.stop(); } catch(e){} }, cfSec * 1000 + 50);
+      
+      startTakePlay(idx, 0, cfSec); // fade in
+      
+    } else if (mode === 'punch') {
+      // ── PUNCH: instant cut at current position, old stops exactly ──
+      try { E.takeSrc.stop(); } catch(e){}
+      startTakePlay(idx, 0, 0);
+      
+    } else {
+      // ── CUT: immediate switch ──
+      try { E.takeSrc.stop(); } catch(e){}
+      startTakePlay(idx, 0, 0);
+    }
+  } else {
+    startTakePlay(idx, 0, 0);
+  }
+  
+  // Auto-play beat if not playing
+  if (E.beatBuf && !E.beatPlaying) playBeat(0);
+}
+
+function startTakePlay(idx, startOffset, fadeInSec) {
+  const c = E.ctx;
+  const buf = E.takes[idx].buffer;
+  
+  E.takeSrc = c.createBufferSource();
+  E.takeSrc.buffer = buf;
+  
+  const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  E.takeGain = c.createGain();
+  
+  if (fadeInSec > 0) {
+    E.takeGain.gain.setValueAtTime(0, c.currentTime);
+    E.takeGain.gain.linearRampToValueAtTime(vol, c.currentTime + fadeInSec);
+  } else {
+    E.takeGain.gain.value = vol;
+  }
+  
+  E.takeSrc.connect(E.takeGain).connect(c.destination);
+  E.takeSrc.start(0, startOffset);
+  
+  E.playingTake = idx;
+  E.selected = idx;
+  renderLanes();
+  showPlayhead(idx);
+  
+  E.takeSrc.onended = () => {
+    E.playingTake = -1;
+    hidePlayhead();
+    renderLanes();
+    updateInfo();
+  };
+  
+  document.getElementById('tInfoMain').textContent = '▶ Take ' + (idx + 1);
+}
+
+function stopTakePlayback() {
+  if (E.takeSrc) { try { E.takeSrc.stop(); } catch(e){} E.takeSrc = null; }
+  E.playingTake = -1;
+  hidePlayhead();
+}
+
+// ═══ PLAYHEAD ═══
+function showPlayhead(idx) {
+  const ph = document.getElementById('playhead');
+  const lanes = document.getElementById('takeLanes');
+  const laneEl = lanes.children[idx + 1]; // +1 for playhead div itself
+  if (!laneEl) return;
+  
+  ph.style.display = 'block';
+  ph.style.top = laneEl.offsetTop + 'px';
+  ph.style.height = laneEl.offsetHeight + 'px';
+  
+  const dur = E.takes[idx]?.duration || 1;
+  const bodyW = laneEl.querySelector('.lane-body')?.offsetWidth || 200;
+  const headerW = 56;
+  let startTime = E.ctx.currentTime;
+  
+  function animate() {
+    if (E.playingTake !== idx) return;
+    const elapsed = E.ctx.currentTime - startTime;
+    const pct = Math.min(elapsed / dur, 1);
+    ph.style.left = (headerW + pct * bodyW) + 'px';
+    if (pct < 1) requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function hidePlayhead() {
+  document.getElementById('playhead').style.display = 'none';
+}
+
+// ═══ CROSSFADE CONTROLS ═══
+function setCf(mode) {
+  E.cfMode = mode;
+  ['cfCut','cfXfade','cfPunch'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(mode === 'cut' ? 'cfCut' : mode === 'xfade' ? 'cfXfade' : 'cfPunch').classList.add('active');
+}
+
+// ═══ DELETE ═══
+function deleteSelected() {
+  if (E.selected < 0 || E.selected >= E.takes.length) return;
+  if (!confirm('Take ' + (E.selected + 1) + ' silinsin mi?')) return;
+  
+  E.takes.splice(E.selected, 1);
+  E.selected = Math.min(E.selected, E.takes.length - 1);
+  renderLanes();
+  updateInfo();
+}
+
+// ═══ EXPORT ═══
+function exportMix() {
+  if (E.selected < 0 || !E.takes[E.selected]?.buffer || !E.beatBuf) {
+    document.getElementById('tInfoMain').textContent = 'Beat + take gerekli';
+    return;
+  }
+  
+  const take = E.takes[E.selected];
+  const dur = Math.max(take.buffer.duration, E.beatBuf.duration);
+  const sr = E.ctx.sampleRate;
+  const off = new OfflineAudioContext(2, dur * sr, sr);
+  
+  // Beat
+  const bs = off.createBufferSource();
+  bs.buffer = E.beatBuf;
+  const bg = off.createGain();
+  bg.gain.value = parseInt(document.getElementById('beatVol').value) / 100;
+  bs.connect(bg).connect(off.destination);
+  
+  // Vocal
+  const vs = off.createBufferSource();
+  vs.buffer = take.buffer;
+  const vg = off.createGain();
+  vg.gain.value = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  vs.connect(vg).connect(off.destination);
+  
+  const lat = parseInt(document.getElementById('latComp').value) / 1000;
+  bs.start(0);
+  vs.start(lat);
+  
+  off.startRendering().then(buf => {
+    const wav = bufToWav(buf);
+    dl(new Blob([wav], { type:'audio/wav' }), `QVLLEN_Mix_Take${E.selected+1}.wav`);
+    document.getElementById('tInfoMain').textContent = '✓ Mix indirildi';
+  });
+}
+
+function exportAllTakes() {
+  E.takes.forEach((t, i) => {
+    dl(t.blob, `Take_${i+1}.webm`);
+  });
+}
+
+function dl(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function bufToWav(buf) {
+  const nCh = buf.numberOfChannels, sr = buf.sampleRate;
+  const bps = 16, ba = nCh * bps/8;
+  const len = buf.length * ba;
+  const ab = new ArrayBuffer(44 + len);
+  const v = new DataView(ab);
+  
+  const ws = (o, s) => { for (let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4, 36+len, true); ws(8,'WAVE');
+  ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+  v.setUint16(22,nCh,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*ba,true); v.setUint16(32,ba,true); v.setUint16(34,bps,true);
+  ws(36,'data'); v.setUint32(40,len,true);
+  
+  const chs = []; for (let c=0;c<nCh;c++) chs.push(buf.getChannelData(c));
+  let o = 44;
+  for (let i=0;i<buf.length;i++) {
+    for (let c=0;c<nCh;c++) {
+      const s = Math.max(-1,Math.min(1,chs[c][i]));
+      v.setInt16(o, s<0?s*0x8000:s*0x7FFF, true);
+      o += 2;
+    }
+  }
+  return ab;
+}
+
+// ═══ METER ═══
+function startMeter() {
+  const arr = new Float32Array(E.analyser.frequencyBinCount);
+  
+  function tick() {
+    E.analyser.getFloatTimeDomainData(arr);
+    let pk = 0;
+    for (let i = 0; i < arr.length; i++) { const a = Math.abs(arr[i]); if (a > pk) pk = a; }
+    
+    const db = pk > 0 ? 20 * Math.log10(pk) : -100;
+    const pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+    
+    document.getElementById('meterFill').style.width = pct + '%';
+    document.getElementById('meterDb').textContent = db < -80 ? '-∞ dB' : db.toFixed(0) + ' dB';
+    
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// ═══ RULER ═══
+function drawRuler() {
+  const cvs = document.getElementById('rulerCanvas');
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = cvs.parentElement.offsetWidth;
+  const h = 22;
+  cvs.width = w * dpr; cvs.height = h * dpr;
+  cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+  
+  ctx.fillStyle = '#222228';
+  ctx.fillRect(0, 0, w, h);
+  
+  // Time marks
+  const dur = E.beatBuf?.duration || 60;
+  const pxPerSec = (w - 56) / dur;
+  
+  ctx.fillStyle = '#555568';
+  ctx.font = '9px "IBM Plex Mono"';
+  ctx.textAlign = 'center';
+  
+  for (let s = 0; s <= dur; s++) {
+    const x = 56 + s * pxPerSec;
+    if (s % 5 === 0) {
+      ctx.fillStyle = '#666678';
+      ctx.fillRect(x, 14, 1, 8);
+      ctx.fillStyle = '#555568';
+      ctx.fillText(fmtTime(s), x, 12);
+    } else {
+      ctx.fillRect(x, 18, 1, 4);
+    }
+  }
+}
+
+// ═══ FX GRID ═══
+function renderFXGrid() {
+  const grid = document.getElementById('fxGrid');
+  grid.innerHTML = '';
+  
+  FX_DEFS.forEach(fx => {
+    const card = document.createElement('div');
+    card.className = 'fx-card';
+    card.innerHTML = `
+      <div class="fx-top">
+        <span class="fx-name">${fx.name}</span>
+        <button class="fx-sw ${fxState[fx.id].on?'on':''}" id="fxSw_${fx.id}"></button>
+      </div>
+      <input type="range" class="fx-range" min="${fx.min}" max="${fx.max}" value="${fxState[fx.id].val}" id="fxR_${fx.id}">
+      <div class="fx-val" id="fxV_${fx.id}">${fxState[fx.id].val}${fx.unit}</div>
+    `;
+    
+    card.querySelector('.fx-sw').onclick = () => {
+      fxState[fx.id].on = !fxState[fx.id].on;
+      card.querySelector('.fx-sw').classList.toggle('on');
+      buildFXChain();
+    };
+    
+    card.querySelector('.fx-range').oninput = function() {
+      fxState[fx.id].val = parseFloat(this.value);
+      document.getElementById('fxV_'+fx.id).textContent = this.value + fx.unit;
+      applyFXParam(fx.id, parseFloat(this.value));
+    };
+    
+    grid.appendChild(card);
+  });
+}
+
+function applyFXParam(id, val) {
+  switch(id) {
+    case 'comp': E.compressor.threshold.value = -10 - (val/100)*30; break;
+    case 'eq': E.eq.gain.value = val; break;
+    case 'reverb': E.reverbSend.gain.value = val/100; break;
+    case 'delay': E.delaySend.gain.value = val/100; break;
+    case 'hpf': E.hpf.frequency.value = val; break;
+    case 'gate': E.gate.threshold.value = val; break;
+  }
+}
+
+// ═══ DRAWERS ═══
+function openDrawer(type) {
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById(type + 'Drawer').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('show');
+  document.querySelectorAll('.drawer').forEach(d => d.classList.remove('show'));
+}
+
+// ═══ UTILS ═══
+function updateInfo() {
+  document.getElementById('tInfoSub').textContent = `Take ${E.selected+1}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s/60);
+  const sec = Math.floor(s%60);
+  return m + ':' + String(sec).padStart(2,'0');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══ RESIZE ═══
+window.addEventListener('resize', () => { drawRuler(); renderLanes(); });
+</script>
+</body>
+</html>
