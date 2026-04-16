@@ -152,6 +152,7 @@ html, body {
 .take-lane.selected { background:var(--fl-orange-dim); }
 .take-lane.recording { background:var(--rec-red-dim); }
 .take-lane.playing { background:var(--green-dim); }
+.take-lane.onebreath { box-shadow: inset 0 0 0 1px rgba(255,202,40,0.28); }
 
 .lane-header {
   width:56px; flex-shrink:0; display:flex; flex-direction:column;
@@ -166,12 +167,14 @@ html, body {
 .take-lane.selected .lane-num { color:var(--fl-orange); }
 .take-lane.recording .lane-num { color:var(--rec-red); }
 .take-lane.playing .lane-num { color:var(--green-bright); }
+.take-lane.onebreath .lane-num { color:var(--yellow); }
 
 .lane-status {
   font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4);
   text-transform:uppercase; letter-spacing:0.5px;
 }
 .take-lane.recording .lane-status { color:var(--rec-red); }
+.take-lane.onebreath .lane-status { color:var(--yellow); }
 
 .lane-body {
   flex:1; position:relative; overflow:hidden;
@@ -315,6 +318,7 @@ html, body {
 .t-act:active { background:var(--surface3); }
 .t-act.export-act { border-color:rgba(76,175,80,0.3); color:var(--green); }
 .t-act.del-act { border-color:rgba(255,45,45,0.2); color:var(--rec-red); }
+.t-act.onebreath-act { border-color:rgba(255,202,40,0.35); color:var(--yellow); }
 
 /* ─── BOTTOM DRAWER (FX / Settings) ─── */
 .drawer-overlay {
@@ -401,7 +405,7 @@ html, body {
 
   <!-- HEADER -->
   <div class="header">
-    <div class="h-logo">QB <span>v2</span></div>
+    <div class="h-logo">QB <span>v4</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -465,6 +469,7 @@ html, body {
       <div class="t-info-sub" id="tInfoSub">Take 1/10</div>
     </div>
     <div class="t-actions">
+      <button class="t-act onebreath-act" onclick="playOneBreath()" title="One Breath">🔥</button>
       <button class="t-act" onclick="playSelected()" title="Dinle">▶</button>
       <button class="t-act del-act" onclick="deleteSelected()" title="Sil">✕</button>
       <button class="t-act export-act" onclick="exportMix()" title="İndir">↓</button>
@@ -537,10 +542,12 @@ html, body {
 
 <script>
 // ════════════════════════════════════════════════════════════════
-// QVLLEN BOOTH v2 — FL Studio-inspired Mobile Rap Studio
+// QVLLEN BOOTH v4 — One Breath + safer playback/export FX parity
 // ════════════════════════════════════════════════════════════════
 
 const MAX_TAKES = 10;
+const ONE_BREATH_GUARD_MS = 18;
+const ONE_BREATH_TARGET_RMS = 0.2;
 
 // Engine state
 const E = {
@@ -562,11 +569,18 @@ const E = {
   takes: [], // {blob, buffer, duration}
   selected: 0,
   playingTake: -1, takeSrc: null,
+  takeGain: null,
   
   cfMode: 'cut',
   
   // Crossfade engine
   pendingCf: null,
+
+  // One Breath
+  oneBreathBuffer: null,
+  oneBreathDirty: true,
+  oneBreathSource: null,
+  oneBreathGain: null,
 };
 
 // FX definitions
@@ -679,7 +693,6 @@ function initFX() {
   E.hpf.frequency.value = 80;
   E.hpf.Q.value = 0.7;
   
-  // Reverb IR
   const irLen = c.sampleRate * 1.5;
   const irBuf = c.createBuffer(2, irLen, c.sampleRate);
   for (let ch = 0; ch < 2; ch++) {
@@ -691,7 +704,6 @@ function initFX() {
   E.reverbSend = c.createGain();
   E.reverbSend.gain.value = 0;
   
-  // Delay
   E.delay = c.createDelay(1);
   E.delay.delayTime.value = 0.22;
   E.delaySend = c.createGain();
@@ -702,7 +714,6 @@ function initFX() {
   E.delayFb.connect(E.delay);
   E.delay.connect(E.delaySend);
   
-  // Gate
   E.gate = c.createDynamicsCompressor();
   E.gate.threshold.value = -50;
   E.gate.knee.value = 0;
@@ -719,7 +730,6 @@ function initFX() {
 }
 
 function buildFXChain() {
-  // Disconnect everything first
   try { E.micSrc.disconnect(); } catch(e){}
   try { E.micGain.disconnect(); } catch(e){}
   try { E.hpf.disconnect(); } catch(e){}
@@ -731,7 +741,6 @@ function buildFXChain() {
   try { E.reverbSend.disconnect(); } catch(e){}
   try { E.delaySend.disconnect(); } catch(e){}
   
-  // Chain: micSrc → micGain → [hpf] → [gate] → [comp] → [eq] → analyser → monitor
   let node = E.micSrc;
   node.connect(E.micGain);
   node = E.micGain;
@@ -744,7 +753,6 @@ function buildFXChain() {
   node.connect(E.analyser);
   E.analyser.connect(E.monitorGain);
   
-  // Sends
   if (fxState.reverb.on) {
     E.analyser.connect(E.reverb);
     E.reverb.connect(E.reverbSend);
@@ -754,6 +762,96 @@ function buildFXChain() {
     E.analyser.connect(E.delay);
     E.delaySend.connect(E.monitorGain);
   }
+}
+
+// ═══ PLAYBACK / EXPORT FX HELPERS ═══
+function connectPlaybackChain(ctx, source, destination, gainValue=1) {
+  let node = source;
+
+  const inputGain = ctx.createGain();
+  inputGain.gain.value = gainValue;
+  node.connect(inputGain);
+  node = inputGain;
+
+  if (fxState.hpf.on) {
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass';
+    hpf.frequency.value = fxState.hpf.val;
+    hpf.Q.value = 0.7;
+    node.connect(hpf);
+    node = hpf;
+  }
+
+  if (fxState.gate.on) {
+    const gate = ctx.createDynamicsCompressor();
+    gate.threshold.value = fxState.gate.val;
+    gate.knee.value = 0;
+    gate.ratio.value = 20;
+    gate.attack.value = 0.001;
+    gate.release.value = 0.05;
+    node.connect(gate);
+    node = gate;
+  }
+
+  if (fxState.comp.on) {
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10 - (fxState.comp.val/100)*30;
+    comp.knee.value = 10;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.15;
+    node.connect(comp);
+    node = comp;
+  }
+
+  if (fxState.eq.on) {
+    const eq = ctx.createBiquadFilter();
+    eq.type = 'peaking';
+    eq.frequency.value = 4000;
+    eq.Q.value = 1.5;
+    eq.gain.value = fxState.eq.val;
+    node.connect(eq);
+    node = eq;
+  }
+
+  const dryGain = ctx.createGain();
+  dryGain.gain.value = 1;
+  node.connect(dryGain);
+  dryGain.connect(destination);
+
+  if (fxState.reverb.on && fxState.reverb.val > 0) {
+    const send = ctx.createGain();
+    send.gain.value = fxState.reverb.val / 100;
+    const convolver = ctx.createConvolver();
+    convolver.buffer = E.reverb?.buffer || buildImpulseResponse(ctx, 1.5);
+    node.connect(send);
+    send.connect(convolver);
+    convolver.connect(destination);
+  }
+
+  if (fxState.delay.on && fxState.delay.val > 0) {
+    const send = ctx.createGain();
+    send.gain.value = fxState.delay.val / 100;
+    const delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.22;
+    const feedback = ctx.createGain();
+    feedback.gain.value = 0.3;
+    delay.connect(feedback);
+    feedback.connect(delay);
+    node.connect(send);
+    send.connect(delay);
+    delay.connect(destination);
+  }
+}
+
+function buildImpulseResponse(ctx, seconds=1.5) {
+  const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.5);
+  }
+  return ir;
 }
 
 // ═══ DEVICES ═══
@@ -788,7 +886,6 @@ async function enumDevices() {
 }
 
 async function setOutput(id) {
-  // setSinkId may not work on all mobile browsers, but we try
   E.outputId = id;
 }
 
@@ -869,14 +966,11 @@ async function startRec() {
     return;
   }
   
-  // Pre-roll
   const pr = parseInt(document.getElementById('preRoll').value);
   if (pr > 0) await doPreRoll(pr);
   
-  // Auto-play beat
   if (E.beatBuf && !E.beatPlaying) playBeat(0);
   
-  // Recorder
   const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
     ? 'audio/webm;codecs=opus' : 'audio/webm';
   E.recorder = new MediaRecorder(E.micStream, { mimeType: mime });
@@ -889,7 +983,6 @@ async function startRec() {
   E.recording = true;
   E.recStart = Date.now();
   
-  // UI
   document.getElementById('tRec').classList.add('recording');
   document.getElementById('tTimer').classList.add('recording');
   document.getElementById('tInfoMain').textContent = '● REC — Take ' + (E.takes.length + 1);
@@ -914,7 +1007,6 @@ async function doPreRoll(beats) {
   
   for (let i = beats; i > 0; i--) {
     document.getElementById('tTimer').textContent = '' + i;
-    // Metronome tick
     const osc = E.ctx.createOscillator();
     const g = E.ctx.createGain();
     osc.frequency.value = i === 1 ? 1200 : 880;
@@ -932,12 +1024,13 @@ function finishTake(mime) {
   const idx = E.takes.length;
   
   E.takes.push({ blob, buffer: null, duration: dur });
+  markOneBreathDirty();
   
-  // Decode async
   blob.arrayBuffer().then(ab => {
     E.ctx.decodeAudioData(ab).then(buf => {
       E.takes[idx].buffer = buf;
       E.takes[idx].duration = buf.duration;
+      markOneBreathDirty();
       drawLaneWaveform(idx);
     });
   });
@@ -967,7 +1060,6 @@ function renderLanes() {
     if (E.recording && i === E.takes.length) lane.classList.add('recording');
     if (i === E.playingTake) lane.classList.add('playing');
     
-    // Header
     const hdr = document.createElement('div');
     hdr.className = 'lane-header';
     hdr.innerHTML = `
@@ -975,7 +1067,6 @@ function renderLanes() {
       <div class="lane-status">${i < E.takes.length ? fmtTime(E.takes[i].duration) : (E.recording && i === E.takes.length ? 'REC' : '')}</div>
     `;
     
-    // Body
     const body = document.createElement('div');
     body.className = 'lane-body';
     
@@ -990,7 +1081,6 @@ function renderLanes() {
       dur.textContent = fmtTime(E.takes[i].duration);
       body.appendChild(dur);
       
-      // Draw after render
       requestAnimationFrame(() => drawLaneWaveform(i));
     } else if (!(E.recording && i === E.takes.length)) {
       const empty = document.createElement('div');
@@ -998,7 +1088,6 @@ function renderLanes() {
       empty.textContent = '—';
       body.appendChild(empty);
     } else {
-      // Recording lane — live viz
       const cvs = document.createElement('canvas');
       cvs.className = 'lane-waveform';
       cvs.id = 'liveCanvas';
@@ -1009,12 +1098,10 @@ function renderLanes() {
     lane.appendChild(hdr);
     lane.appendChild(body);
     
-    // Tap to select
     lane.addEventListener('click', () => {
       if (i < E.takes.length) { E.selected = i; renderLanes(); updateInfo(); }
     });
     
-    // Double-tap to play
     let lastTap = 0;
     lane.addEventListener('touchend', (ev) => {
       const now = Date.now();
@@ -1028,7 +1115,30 @@ function renderLanes() {
     container.appendChild(lane);
   }
   
-  document.getElementById('tInfoSub').textContent = `Take ${E.selected + 1}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+  if (E.takes.length > 1) {
+    const lane = document.createElement('div');
+    lane.className = 'take-lane onebreath';
+    if (E.playingTake === -2) lane.classList.add('playing');
+    const hdr = document.createElement('div');
+    hdr.className = 'lane-header';
+    hdr.innerHTML = `
+      <div class="lane-num">🔥</div>
+      <div class="lane-status">ONE</div>
+    `;
+    const body = document.createElement('div');
+    body.className = 'lane-body';
+    const info = document.createElement('div');
+    info.className = 'lane-empty';
+    const ob = getOneBreathBuffer(false);
+    info.textContent = ob ? `One Breath · ${fmtTime(ob.duration)}` : 'One Breath hazırlanıyor';
+    body.appendChild(info);
+    lane.appendChild(hdr);
+    lane.appendChild(body);
+    lane.addEventListener('click', () => playOneBreath());
+    container.appendChild(lane);
+  }
+  
+  document.getElementById('tInfoSub').textContent = `Take ${Math.max(1,E.selected + 1)}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
 }
 
 function drawLaneWaveform(idx) {
@@ -1046,15 +1156,12 @@ function drawLaneWaveform(idx) {
   
   const w = rect.width, h = rect.height;
   const data = E.takes[idx].buffer.getChannelData(0);
-  const step = Math.ceil(data.length / w);
+  const step = Math.max(1, Math.ceil(data.length / Math.max(1,w)));
   
-  // Gradient fill
   const isSelected = idx === E.selected;
   const color = isSelected ? 'rgba(255,109,0,' : 'rgba(76,175,80,';
   
   ctx.clearRect(0, 0, w, h);
-  
-  // Waveform bars style (FL-like)
   ctx.fillStyle = color + '0.6)';
   
   for (let i = 0; i < w; i++) {
@@ -1066,10 +1173,9 @@ function drawLaneWaveform(idx) {
     }
     const yTop = ((1 - max) / 2) * h;
     const yBot = ((1 - min) / 2) * h;
-    ctx.fillRect(i, yTop, 1, yBot - yTop);
+    ctx.fillRect(i, yTop, 1, Math.max(1, yBot - yTop));
   }
   
-  // Center line
   ctx.strokeStyle = color + '0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath();
@@ -1129,26 +1235,23 @@ function playTakeWithTransition(idx) {
   const mode = E.cfMode;
   const c = E.ctx;
   const now = c.currentTime;
+
+  stopOneBreathPlayback();
   
-  // If already playing a take, apply transition
   if (E.takeSrc && E.playingTake >= 0) {
     const oldGain = E.takeGain;
     
-    if (mode === 'xfade' && cfSec > 0) {
-      // ── CROSSFADE: old fades out, new fades in ──
+    if (mode === 'xfade' && cfSec > 0 && oldGain) {
       oldGain.gain.setValueAtTime(oldGain.gain.value, now);
       oldGain.gain.linearRampToValueAtTime(0, now + cfSec);
       setTimeout(() => { try { E.takeSrc.stop(); } catch(e){} }, cfSec * 1000 + 50);
-      
-      startTakePlay(idx, 0, cfSec); // fade in
+      startTakePlay(idx, 0, cfSec);
       
     } else if (mode === 'punch') {
-      // ── PUNCH: instant cut at current position, old stops exactly ──
       try { E.takeSrc.stop(); } catch(e){}
       startTakePlay(idx, 0, 0);
       
     } else {
-      // ── CUT: immediate switch ──
       try { E.takeSrc.stop(); } catch(e){}
       startTakePlay(idx, 0, 0);
     }
@@ -1156,7 +1259,6 @@ function playTakeWithTransition(idx) {
     startTakePlay(idx, 0, 0);
   }
   
-  // Auto-play beat if not playing
   if (E.beatBuf && !E.beatPlaying) playBeat(0);
 }
 
@@ -1176,20 +1278,23 @@ function startTakePlay(idx, startOffset, fadeInSec) {
   } else {
     E.takeGain.gain.value = vol;
   }
-  
-  E.takeSrc.connect(E.takeGain).connect(c.destination);
+
+  connectPlaybackChain(c, E.takeSrc, E.takeGain, 1);
+  E.takeGain.connect(c.destination);
   E.takeSrc.start(0, startOffset);
   
   E.playingTake = idx;
   E.selected = idx;
   renderLanes();
-  showPlayhead(idx);
+  showPlayhead(idx, buf.duration);
   
   E.takeSrc.onended = () => {
-    E.playingTake = -1;
-    hidePlayhead();
-    renderLanes();
-    updateInfo();
+    if (E.playingTake === idx) {
+      E.playingTake = -1;
+      hidePlayhead();
+      renderLanes();
+      updateInfo();
+    }
   };
   
   document.getElementById('tInfoMain').textContent = '▶ Take ' + (idx + 1);
@@ -1197,22 +1302,221 @@ function startTakePlay(idx, startOffset, fadeInSec) {
 
 function stopTakePlayback() {
   if (E.takeSrc) { try { E.takeSrc.stop(); } catch(e){} E.takeSrc = null; }
+  stopOneBreathPlayback();
   E.playingTake = -1;
   hidePlayhead();
 }
 
+// ═══ ONE BREATH ENGINE ═══
+function markOneBreathDirty() {
+  E.oneBreathDirty = true;
+  E.oneBreathBuffer = null;
+}
+
+function playOneBreath() {
+  if (E.takes.length === 0) return;
+  const buf = getOneBreathBuffer(true);
+  if (!buf) {
+    document.getElementById('tInfoMain').textContent = 'One Breath hazır değil';
+    return;
+  }
+
+  if (E.beatBuf && !E.beatPlaying) playBeat(0);
+  if (E.takeSrc) { try { E.takeSrc.stop(); } catch(e){} E.takeSrc = null; }
+  stopOneBreathPlayback();
+
+  const src = E.ctx.createBufferSource();
+  src.buffer = buf;
+
+  const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  const g = E.ctx.createGain();
+  g.gain.value = vol;
+
+  connectPlaybackChain(E.ctx, src, g, 1);
+  g.connect(E.ctx.destination);
+  src.start(0);
+
+  E.oneBreathSource = src;
+  E.oneBreathGain = g;
+  E.playingTake = -2;
+  renderLanes();
+  showPlayhead(-2, buf.duration);
+  document.getElementById('tInfoMain').textContent = '🔥 One Breath';
+
+  src.onended = () => {
+    if (E.playingTake === -2) {
+      E.playingTake = -1;
+      hidePlayhead();
+      renderLanes();
+      updateInfo();
+    }
+  };
+}
+
+function stopOneBreathPlayback() {
+  if (E.oneBreathSource) {
+    try { E.oneBreathSource.stop(); } catch(e){}
+    E.oneBreathSource = null;
+  }
+}
+
+function getOneBreathBuffer(rebuildIfDirty=true) {
+  if (!E.oneBreathDirty && E.oneBreathBuffer) return E.oneBreathBuffer;
+  if (!rebuildIfDirty) return E.oneBreathBuffer;
+  E.oneBreathBuffer = buildOneBreathBuffer();
+  E.oneBreathDirty = false;
+  return E.oneBreathBuffer;
+}
+
+function buildOneBreathBuffer() {
+  if (!E.ctx) return null;
+  const valid = E.takes.filter(t => t?.buffer);
+  if (!valid.length) return null;
+  if (valid.length === 1) return valid[0].buffer;
+
+  const sr = E.ctx.sampleRate;
+  const cfMs = Math.max(0, parseInt(document.getElementById('cfMs').value) || 0);
+  const fadeSamples = Math.floor(sr * cfMs / 1000);
+  const mode = E.cfMode;
+
+  const segments = valid.map(t => {
+    const mono = ensureSampleRateMono(t.buffer, sr);
+    const trimmed = trimFloat32(mono, sr, ONE_BREATH_GUARD_MS, 0.01);
+    const normalized = normalizeFloat32(trimmed, ONE_BREATH_TARGET_RMS);
+    return normalized;
+  }).filter(seg => seg.length > 0);
+
+  if (!segments.length) return null;
+  if (segments.length === 1) return float32ToBuffer(segments[0], sr);
+
+  let assembled = segments[0];
+  for (let i = 1; i < segments.length; i++) {
+    const next = segments[i];
+    if (mode === 'xfade' && fadeSamples > 0) {
+      assembled = crossfadeFloat32(assembled, next, fadeSamples);
+    } else if (mode === 'punch') {
+      assembled = appendWithOverlap(assembled, next, Math.floor(fadeSamples * 0.35));
+    } else {
+      assembled = concatFloat32(assembled, next);
+    }
+  }
+
+  return float32ToBuffer(assembled, sr);
+}
+
+function ensureSampleRateMono(buffer, targetSr) {
+  let src = buffer;
+  if (src.sampleRate !== targetSr) {
+    src = resampleBufferToRate(src, targetSr);
+  }
+  const ch0 = src.getChannelData(0);
+  if (src.numberOfChannels === 1) return new Float32Array(ch0);
+  const ch1 = src.getChannelData(1);
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = (ch0[i] + ch1[i]) * 0.5;
+  return out;
+}
+
+function resampleBufferToRate(buffer, targetSr) {
+  if (buffer.sampleRate === targetSr) return buffer;
+  const channels = buffer.numberOfChannels;
+  const ratio = targetSr / buffer.sampleRate;
+  const newLen = Math.max(1, Math.round(buffer.length * ratio));
+  const out = E.ctx.createBuffer(channels, newLen, targetSr);
+  for (let ch = 0; ch < channels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    for (let i = 0; i < newLen; i++) {
+      const pos = i / ratio;
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(src.length - 1, i0 + 1);
+      const frac = pos - i0;
+      dst[i] = src[i0] * (1 - frac) + src[i1] * frac;
+    }
+  }
+  return out;
+}
+
+function trimFloat32(data, sr, guardMs=18, threshold=0.01) {
+  const guard = Math.max(0, Math.floor(sr * guardMs / 1000));
+  let start = 0;
+  let end = data.length;
+
+  while (start < end && Math.abs(data[start]) < threshold) start++;
+  while (end > start && Math.abs(data[end - 1]) < threshold) end--;
+
+  start = Math.max(0, start - guard);
+  end = Math.min(data.length, end + guard);
+  if (end <= start) return new Float32Array(0);
+  return data.slice(start, end);
+}
+
+function normalizeFloat32(data, target=0.2) {
+  if (!data.length) return data;
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+  const rms = Math.sqrt(sum / data.length);
+  const gain = target / Math.max(rms, 0.001);
+  const safeGain = Math.min(gain, 4);
+  const out = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) out[i] = Math.max(-1, Math.min(1, data[i] * safeGain));
+  return out;
+}
+
+function crossfadeFloat32(a, b, fadeSamples) {
+  const f = Math.min(fadeSamples, a.length, b.length);
+  if (f <= 0) return concatFloat32(a, b);
+  const out = new Float32Array(a.length + b.length - f);
+  const split = a.length - f;
+  out.set(a.slice(0, split), 0);
+  for (let i = 0; i < f; i++) {
+    const t = i / f;
+    const fadeOut = Math.cos(t * Math.PI * 0.5);
+    const fadeIn = Math.sin(t * Math.PI * 0.5);
+    out[split + i] = a[split + i] * fadeOut + b[i] * fadeIn;
+  }
+  out.set(b.slice(f), split + f);
+  return out;
+}
+
+function appendWithOverlap(a, b, overlapSamples) {
+  const overlap = Math.min(Math.max(0, overlapSamples), a.length, b.length);
+  if (overlap <= 0) return concatFloat32(a, b);
+  const out = new Float32Array(a.length + b.length - overlap);
+  out.set(a.slice(0, a.length - overlap), 0);
+  for (let i = 0; i < overlap; i++) {
+    out[a.length - overlap + i] = a[a.length - overlap + i] * 0.35 + b[i];
+  }
+  out.set(b.slice(overlap), a.length);
+  return out;
+}
+
+function concatFloat32(a, b) {
+  const out = new Float32Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function float32ToBuffer(data, sr) {
+  const out = E.ctx.createBuffer(1, data.length, sr);
+  out.getChannelData(0).set(data);
+  return out;
+}
+
 // ═══ PLAYHEAD ═══
-function showPlayhead(idx) {
+function showPlayhead(idx, forcedDur=null) {
   const ph = document.getElementById('playhead');
   const lanes = document.getElementById('takeLanes');
-  const laneEl = lanes.children[idx + 1]; // +1 for playhead div itself
+  const laneIndex = idx === -2 ? lanes.children.length - 1 : idx + 1;
+  const laneEl = lanes.children[laneIndex];
   if (!laneEl) return;
   
   ph.style.display = 'block';
   ph.style.top = laneEl.offsetTop + 'px';
   ph.style.height = laneEl.offsetHeight + 'px';
   
-  const dur = E.takes[idx]?.duration || 1;
+  const dur = forcedDur || (idx === -2 ? (getOneBreathBuffer(false)?.duration || 1) : (E.takes[idx]?.duration || 1));
   const bodyW = laneEl.querySelector('.lane-body')?.offsetWidth || 200;
   const headerW = 56;
   let startTime = E.ctx.currentTime;
@@ -1220,7 +1524,7 @@ function showPlayhead(idx) {
   function animate() {
     if (E.playingTake !== idx) return;
     const elapsed = E.ctx.currentTime - startTime;
-    const pct = Math.min(elapsed / dur, 1);
+    const pct = Math.min(elapsed / Math.max(0.001,dur), 1);
     ph.style.left = (headerW + pct * bodyW) + 'px';
     if (pct < 1) requestAnimationFrame(animate);
   }
@@ -1234,6 +1538,7 @@ function hidePlayhead() {
 // ═══ CROSSFADE CONTROLS ═══
 function setCf(mode) {
   E.cfMode = mode;
+  markOneBreathDirty();
   ['cfCut','cfXfade','cfPunch'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById(mode === 'cut' ? 'cfCut' : mode === 'xfade' ? 'cfXfade' : 'cfPunch').classList.add('active');
 }
@@ -1244,46 +1549,66 @@ function deleteSelected() {
   if (!confirm('Take ' + (E.selected + 1) + ' silinsin mi?')) return;
   
   E.takes.splice(E.selected, 1);
-  E.selected = Math.min(E.selected, E.takes.length - 1);
+  E.selected = Math.min(Math.max(0,E.selected), Math.max(0,E.takes.length - 1));
+  markOneBreathDirty();
   renderLanes();
   updateInfo();
 }
 
 // ═══ EXPORT ═══
 function exportMix() {
-  if (E.selected < 0 || !E.takes[E.selected]?.buffer || !E.beatBuf) {
-    document.getElementById('tInfoMain').textContent = 'Beat + take gerekli';
+  const selectedTake = E.takes[E.selected]?.buffer || null;
+  const vocalBuf = (E.takes.length > 1 ? getOneBreathBuffer(true) : selectedTake);
+  if (!vocalBuf && !E.beatBuf) {
+    document.getElementById('tInfoMain').textContent = 'Beat veya take gerekli';
     return;
   }
-  
-  const take = E.takes[E.selected];
-  const dur = Math.max(take.buffer.duration, E.beatBuf.duration);
+
+  const vocalDur = vocalBuf?.duration || 0;
+  const beatDur = E.beatBuf?.duration || 0;
+  const dur = Math.max(vocalDur, beatDur, 1);
   const sr = E.ctx.sampleRate;
-  const off = new OfflineAudioContext(2, dur * sr, sr);
-  
-  // Beat
-  const bs = off.createBufferSource();
-  bs.buffer = E.beatBuf;
-  const bg = off.createGain();
-  bg.gain.value = parseInt(document.getElementById('beatVol').value) / 100;
-  bs.connect(bg).connect(off.destination);
-  
-  // Vocal
-  const vs = off.createBufferSource();
-  vs.buffer = take.buffer;
-  const vg = off.createGain();
-  vg.gain.value = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
-  vs.connect(vg).connect(off.destination);
-  
-  const lat = parseInt(document.getElementById('latComp').value) / 1000;
-  bs.start(0);
-  vs.start(lat);
+  const off = new OfflineAudioContext(2, Math.ceil(dur * sr), sr);
+  const vocalOut = off.createGain();
+  vocalOut.gain.value = 1;
+  vocalOut.connect(off.destination);
+
+  if (E.beatBuf) {
+    const bs = off.createBufferSource();
+    bs.buffer = E.beatBuf;
+    bs.loop = beatDur > 0 && beatDur < dur;
+    const bg = off.createGain();
+    bg.gain.value = parseInt(document.getElementById('beatVol').value) / 100;
+    bs.connect(bg).connect(off.destination);
+    bs.start(0);
+  }
+
+  if (vocalBuf) {
+    const vs = off.createBufferSource();
+    vs.buffer = cloneBufferToContext(vocalBuf, off);
+    const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+    connectPlaybackChain(off, vs, vocalOut, vol);
+    const lat = 0;
+    vs.start(lat);
+  }
   
   off.startRendering().then(buf => {
     const wav = bufToWav(buf);
-    dl(new Blob([wav], { type:'audio/wav' }), `QVLLEN_Mix_Take${E.selected+1}.wav`);
+    const name = E.takes.length > 1 ? 'QVLLEN_ONE_BREATH_MIX.wav' : `QVLLEN_Mix_Take${E.selected+1}.wav`;
+    dl(new Blob([wav], { type:'audio/wav' }), name);
     document.getElementById('tInfoMain').textContent = '✓ Mix indirildi';
+  }).catch(err => {
+    console.error(err);
+    document.getElementById('tInfoMain').textContent = 'Export hatası';
   });
+}
+
+function cloneBufferToContext(buffer, ctx) {
+  const out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    out.getChannelData(ch).set(buffer.getChannelData(ch));
+  }
+  return out;
 }
 
 function exportAllTakes() {
@@ -1360,9 +1685,8 @@ function drawRuler() {
   ctx.fillStyle = '#222228';
   ctx.fillRect(0, 0, w, h);
   
-  // Time marks
-  const dur = E.beatBuf?.duration || 60;
-  const pxPerSec = (w - 56) / dur;
+  const dur = E.beatBuf?.duration || getOneBreathBuffer(false)?.duration || 60;
+  const pxPerSec = (w - 56) / Math.max(1, dur);
   
   ctx.fillStyle = '#555568';
   ctx.font = '9px "IBM Plex Mono"';
@@ -1437,7 +1761,7 @@ function closeDrawer() {
 
 // ═══ UTILS ═══
 function updateInfo() {
-  document.getElementById('tInfoSub').textContent = `Take ${E.selected+1}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+  document.getElementById('tInfoSub').textContent = `Take ${Math.max(1,E.selected+1)}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
 }
 
 function fmtTime(s) {
@@ -1448,8 +1772,12 @@ function fmtTime(s) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ═══ RESIZE ═══
 window.addEventListener('resize', () => { drawRuler(); renderLanes(); });
+document.getElementById('cfMs').addEventListener('input', () => markOneBreathDirty());
+document.getElementById('vocalVol').addEventListener('input', () => {
+  if (E.takeGain) E.takeGain.gain.value = parseInt(document.getElementById('vocalVol').value || 100) / 100;
+  if (E.oneBreathGain) E.oneBreathGain.gain.value = parseInt(document.getElementById('vocalVol').value || 100) / 100;
+});
 </script>
 </body>
 </html>
