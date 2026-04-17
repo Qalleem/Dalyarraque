@@ -693,64 +693,31 @@ html, body {
 <div class="drawer" id="aiDrawer">
   <div class="drawer-handle"></div>
   <div class="drawer-title">AI SES DEVAMI</div>
-  <div class="drawer-sub">Sesinizi kopyalayarak flow'a devam edin</div>
+  <div class="drawer-sub">ElevenLabs ile hazır AI sesiyle flow'a devam et</div>
 
-  <div class="ai-tabs">
-    <button class="ai-tab active" id="tabFish" onclick="switchAiTab('fish')">FISH AUDIO</button>
-    <button class="ai-tab" id="tabEl" onclick="switchAiTab('el')">ELEVENLABS</button>
+  <div class="ai-section-title">ELEVENLABS API KEY</div>
+  <div class="ai-desc">Ücretsiz plan — 10.000 karakter/ay. elevenlabs.io → Profile → API Keys.</div>
+  <div class="ai-key-row">
+    <input type="password" id="elApiKey" placeholder="sk-..." autocomplete="off" oninput="saveElKey()">
+    <button class="s-btn primary" onclick="testElKey()">Test</button>
   </div>
+  <div class="ai-voice-status" id="elKeyStatus"></div>
 
-  <!-- ══ FISH AUDIO PANEL ══ -->
-  <div id="fishPanel">
-    <div class="ai-section-title">FISH AUDIO API KEY</div>
-    <div class="ai-desc">fish.audio → Dashboard → API Keys. Ücretsiz kredi ile başlar. Türkçe destekli.</div>
-    <div class="ai-key-row">
-      <input type="password" id="fishApiKey" placeholder="API key..." autocomplete="off">
-      <button class="s-btn primary" onclick="testFishKey()">Test</button>
-    </div>
-    <div class="ai-voice-status" id="fishKeyStatus"></div>
+  <div class="ai-section-title">SES SEÇ</div>
+  <div class="ai-clone-info">Hesabındaki sesler listelenir. İstediğini seç — Türkçeye uygun olanlar önerilir.</div>
+  <select class="s-select" id="elVoiceSelect" style="width:100%;height:34px;margin-bottom:8px;">
+    <option value="">— Önce API key'i test et —</option>
+  </select>
+  <div class="ai-voice-status" id="elCloneStatus"></div>
 
-    <div class="ai-clone-info">
-      Son kaydedilen take referans ses olarak kullanılır — sesin sıfırdan klonlanır, ayrıca bir şey yapman gerekmez.
-    </div>
+  <div class="ai-section-title">DEVAM METNİ</div>
+  <textarea class="ai-textarea" id="elText" placeholder="Flow'a devam etmek istediğin satırları yaz...&#10;Örn: Kafam dolu boşaltıyorum her sözü / Ritim bende kalmaz durur özü"></textarea>
 
-    <div class="ai-section-title">DEVAM METNİ</div>
-    <textarea class="ai-textarea" id="fishText" placeholder="Flow'a devam etmek istediğin satırları yaz...&#10;Örn: Kafam dolu boşaltıyorum her sözü / Ritim bende kalmaz durur özü"></textarea>
-
-    <div class="ai-action-row">
-      <button class="s-btn primary" style="flex:1;height:40px;font-size:13px;" id="fishGenBtn" onclick="generateFishVoice()">Oluştur &amp; Take Ekle</button>
-      <button class="s-btn" onclick="closeDrawer()">Kapat</button>
-    </div>
-    <div class="ai-voice-status" id="fishGenStatus"></div>
+  <div class="ai-action-row">
+    <button class="s-btn primary" style="flex:1;height:40px;font-size:13px;" id="elGenBtn" onclick="generateAiVoice()">Oluştur &amp; Take Ekle</button>
+    <button class="s-btn" onclick="closeDrawer()">Kapat</button>
   </div>
-
-  <!-- ══ ELEVENLABS PANEL ══ -->
-  <div id="elPanel" style="display:none">
-    <div class="ai-section-title">ELEVENLABS API KEY</div>
-    <div class="ai-desc">Ses klonlama ücretli plan gerektirir. Ücretsiz planda hazır seslerden biri kullanılır.</div>
-    <div class="ai-key-row">
-      <input type="password" id="elApiKey" placeholder="sk-..." autocomplete="off" oninput="saveElKey()">
-      <button class="s-btn primary" onclick="testElKey()">Test</button>
-    </div>
-    <div class="ai-voice-status" id="elKeyStatus"></div>
-
-    <div class="ai-section-title">VOICE ID</div>
-    <div class="ai-clone-info">Boş bırakırsan ücretli klonlama dener. Hazır ses için ElevenLabs'dan bir Voice ID kopyala.</div>
-    <div class="ai-key-row">
-      <input type="text" id="elVoiceId" placeholder="Voice ID (boş = otomatik)" autocomplete="off">
-      <button class="s-btn" onclick="cloneVoiceNow()" id="elCloneBtn">Klonla</button>
-    </div>
-    <div class="ai-voice-status" id="elCloneStatus"></div>
-
-    <div class="ai-section-title">DEVAM METNİ</div>
-    <textarea class="ai-textarea" id="elText" placeholder="Söylenecek metin..."></textarea>
-
-    <div class="ai-action-row">
-      <button class="s-btn primary" style="flex:1;height:40px;font-size:13px;" id="elGenBtn" onclick="generateAiVoice()">Oluştur &amp; Take Ekle</button>
-      <button class="s-btn" onclick="closeDrawer()">Kapat</button>
-    </div>
-    <div class="ai-voice-status" id="elGenStatus"></div>
-  </div>
+  <div class="ai-voice-status" id="elGenStatus"></div>
 
   <div style="margin-top:8px; padding:8px; background:var(--bg-deep); border-radius:6px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.6;">
     Oluşturulan ses take listesine eklenir · AUTO açıksa geçiş otomatik analiz edilir · Export'a dahil olur
@@ -2271,14 +2238,7 @@ function applyAutoTransition(result, takeIdx) {
   toast(`AUTO: ${label} ${result.ms}ms — Take ${takeIdx + 1}`, 'ok');
 }
 
-// ═══ AI VOICE CONTINUATION ═══
-
-function switchAiTab(tab) {
-  document.getElementById('fishPanel').style.display = tab === 'fish' ? '' : 'none';
-  document.getElementById('elPanel').style.display   = tab === 'el'   ? '' : 'none';
-  document.getElementById('tabFish').classList.toggle('active', tab === 'fish');
-  document.getElementById('tabEl').classList.toggle('active',   tab === 'el');
-}
+// ═══ AI VOICE CONTINUATION (ElevenLabs) ═══
 
 function saveElKey() {
   const key = document.getElementById('elApiKey')?.value || '';
@@ -2286,102 +2246,39 @@ function saveElKey() {
 }
 
 function loadElSettings() {
-  const fishKey = localStorage.getItem('fish_api_key') || '';
-  const elKey   = localStorage.getItem('el_api_key')   || '';
-  const elVid   = localStorage.getItem('el_voice_id')  || '';
-  const fk = document.getElementById('fishApiKey');
+  const elKey = localStorage.getItem('el_api_key') || '';
   const ek = document.getElementById('elApiKey');
-  const vl = document.getElementById('elVoiceId');
-  if (fk && fishKey) fk.value = fishKey;
-  if (ek && elKey)   ek.value = elKey;
-  if (vl && elVid)   vl.value = elVid;
+  if (ek && elKey) {
+    ek.value = elKey;
+    // Auto-load voices if key saved
+    fetchElVoices(elKey);
+  }
 }
 
-// ── Fish Audio ──
-async function testFishKey() {
-  const apiKey   = document.getElementById('fishApiKey')?.value.trim() || '';
-  const statusEl = document.getElementById('fishKeyStatus');
-  if (!apiKey) { statusEl.textContent = '⚠ API key boş'; statusEl.className = 'ai-voice-status err'; return; }
-  statusEl.textContent = 'Test ediliyor...'; statusEl.className = 'ai-voice-status';
+async function fetchElVoices(apiKey) {
+  const sel = document.getElementById('elVoiceSelect');
+  if (!sel || !apiKey) return;
   try {
-    const r = await fetch('https://api.fish.audio/wallet/balance', {
-      headers: { 'Authorization': 'Bearer ' + apiKey }
+    const r = await fetch('https://api.elevenlabs.io/v1/voices', {
+      headers: { 'xi-api-key': apiKey }
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) return;
     const data = await r.json();
-    const bal = typeof data.balance === 'number' ? data.balance.toFixed(2) : (data.balance ?? '?');
-    statusEl.textContent = `✓ Bağlı — Bakiye: $${bal}`;
-    statusEl.className = 'ai-voice-status ok';
-    localStorage.setItem('fish_api_key', apiKey);
-  } catch (e) {
-    statusEl.textContent = '✗ Hata: ' + (e.message || e);
-    statusEl.className = 'ai-voice-status err';
-  }
-}
-
-async function generateFishVoice() {
-  const apiKey   = document.getElementById('fishApiKey')?.value.trim() || '';
-  const text     = document.getElementById('fishText')?.value.trim()   || '';
-  const statusEl = document.getElementById('fishGenStatus');
-  const btn      = document.getElementById('fishGenBtn');
-
-  if (!apiKey) { toast('Fish Audio API key gerekli', 'err'); return; }
-  if (!text)   { toast('Metin yazın', 'err'); return; }
-  if (E.takes.length >= MAX_TAKES) { toast('⚠ Max 10 take dolu', 'err'); return; }
-
-  btn.disabled = true;
-  statusEl.textContent = ''; statusEl.className = 'ai-voice-status';
-
-  try {
-    if (typeof MessagePack === 'undefined') throw new Error('MessagePack kütüphanesi yüklenemedi — sayfayı yenileyin');
-
-    const sourceTake = [...E.takes].reverse().find(t => t.blob && !t.isAi);
-    if (!sourceTake) throw new Error('Önce en az 1 take kaydedin (referans ses olarak kullanılacak)');
-
-    statusEl.textContent = 'Ses oluşturuluyor (referans klon)...'; statusEl.className = 'ai-voice-status';
-
-    const audioBytes = new Uint8Array(await sourceTake.blob.arrayBuffer());
-
-    const payload = {
-      text,
-      references: [{ audio: audioBytes, text: '' }],
-      format: 'mp3',
-      mp3_bitrate: 128,
-      normalize: true,
-      latency: 'normal',
-    };
-
-    const body = MessagePack.encode(payload);
-
-    const r = await fetch('https://api.fish.audio/v1/tts', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + apiKey,
-        'Content-Type': 'application/msgpack',
-      },
-      body,
+    const voices = data.voices || [];
+    const savedId = localStorage.getItem('el_voice_id') || '';
+    sel.innerHTML = '';
+    voices.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.voice_id;
+      opt.textContent = v.name + (v.labels?.accent ? ' — ' + v.labels.accent : '');
+      if (v.voice_id === savedId) opt.selected = true;
+      sel.appendChild(opt);
     });
-
-    if (!r.ok) {
-      const errText = await r.text().catch(() => '');
-      throw new Error(errText || 'HTTP ' + r.status);
-    }
-
-    const audioBlob = new Blob([await r.arrayBuffer()], { type: 'audio/mpeg' });
-    const ab = await audioBlob.arrayBuffer();
-    const buf = await E.ctx.decodeAudioData(ab.slice(0));
-
-    await addAiTake(buf, audioBlob, statusEl, 'fishGenBtn');
-    localStorage.setItem('fish_api_key', apiKey);
-  } catch (e) {
-    statusEl.textContent = '✗ ' + (e.message || String(e));
-    statusEl.className = 'ai-voice-status err';
-    toast('Fish Audio hatası: ' + (e.message || e), 'err');
-    btn.disabled = false;
-  }
+    if (!savedId && voices.length) localStorage.setItem('el_voice_id', voices[0].voice_id);
+    sel.onchange = () => localStorage.setItem('el_voice_id', sel.value);
+  } catch(e) { /* silent */ }
 }
 
-// ── ElevenLabs ──
 async function testElKey() {
   const apiKey   = document.getElementById('elApiKey')?.value.trim() || '';
   const statusEl = document.getElementById('elKeyStatus');
@@ -2393,53 +2290,34 @@ async function testElKey() {
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    statusEl.textContent = `✓ Bağlı — ${data.voices?.length || 0} ses mevcut`;
+    const voices = data.voices || [];
+    statusEl.textContent = `✓ Bağlı — ${voices.length} ses listelendi`;
     statusEl.className = 'ai-voice-status ok';
     localStorage.setItem('el_api_key', apiKey);
+    // Populate voice dropdown
+    const sel = document.getElementById('elVoiceSelect');
+    const savedId = localStorage.getItem('el_voice_id') || '';
+    if (sel) {
+      sel.innerHTML = '';
+      voices.forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.voice_id;
+        opt.textContent = v.name + (v.labels?.accent ? ' — ' + v.labels.accent : '');
+        if (v.voice_id === savedId) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      sel.onchange = () => localStorage.setItem('el_voice_id', sel.value);
+      if (!savedId && voices.length) {
+        sel.value = voices[0].voice_id;
+        localStorage.setItem('el_voice_id', voices[0].voice_id);
+      }
+    }
+    document.getElementById('elCloneStatus').textContent = 'Bir ses seç, metni yaz, Oluştur\'a bas.';
+    document.getElementById('elCloneStatus').className = 'ai-voice-status ok';
   } catch (e) {
     statusEl.textContent = '✗ Hata: ' + (e.message || e);
     statusEl.className = 'ai-voice-status err';
   }
-}
-
-async function cloneVoiceNow() {
-  const apiKey   = document.getElementById('elApiKey')?.value.trim() || '';
-  const statusEl = document.getElementById('elCloneStatus');
-  const btn      = document.getElementById('elCloneBtn');
-  if (!apiKey) { statusEl.textContent = '⚠ API key gerekli'; statusEl.className = 'ai-voice-status err'; return; }
-  const sourceTake = [...E.takes].reverse().find(t => t.blob && !t.isAi);
-  if (!sourceTake) { statusEl.textContent = '⚠ Önce bir take kaydedin'; statusEl.className = 'ai-voice-status err'; return; }
-  btn.disabled = true;
-  statusEl.textContent = 'Klonlanıyor...'; statusEl.className = 'ai-voice-status';
-  try {
-    const voiceId = await cloneVoiceFromTake(apiKey, sourceTake);
-    if (!voiceId) throw new Error('Voice ID alınamadı');
-    document.getElementById('elVoiceId').value = voiceId;
-    localStorage.setItem('el_voice_id', voiceId);
-    statusEl.textContent = `✓ Klon hazır: ${voiceId}`;
-    statusEl.className = 'ai-voice-status ok';
-  } catch (e) {
-    statusEl.textContent = '✗ ' + (e.message || e);
-    statusEl.className = 'ai-voice-status err';
-  } finally { btn.disabled = false; }
-}
-
-async function cloneVoiceFromTake(apiKey, sourceTake) {
-  const formData = new FormData();
-  formData.append('name', 'QVLLEN_Voice_' + Date.now());
-  formData.append('description', 'Auto-cloned from QVLLEN Booth');
-  const ext = sourceTake.blob.type.includes('mp4') ? 'mp4' : 'webm';
-  formData.append('files', sourceTake.blob, 'voice_sample.' + ext);
-  const r = await fetch('https://api.elevenlabs.io/v1/voices/add', {
-    method: 'POST',
-    headers: { 'xi-api-key': apiKey },
-    body: formData,
-  });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.detail?.message || 'HTTP ' + r.status);
-  }
-  return (await r.json()).voice_id;
 }
 
 async function generateAiVoice() {
@@ -2448,28 +2326,18 @@ async function generateAiVoice() {
   const statusEl = document.getElementById('elGenStatus');
   const btn      = document.getElementById('elGenBtn');
 
-  if (!apiKey) { toast('ElevenLabs API key gerekli', 'err'); return; }
+  if (!apiKey) { toast('ElevenLabs API key gerekli — Test et önce', 'err'); return; }
   if (!text)   { toast('Metin yazın', 'err'); return; }
   if (E.takes.length >= MAX_TAKES) { toast('⚠ Max 10 take dolu', 'err'); return; }
 
+  const voiceId = document.getElementById('elVoiceSelect')?.value
+               || localStorage.getItem('el_voice_id')
+               || 'pNInz6obpgDQGcFmaJgB';
+
   btn.disabled = true;
-  statusEl.textContent = ''; statusEl.className = 'ai-voice-status';
+  statusEl.textContent = 'Ses oluşturuluyor...'; statusEl.className = 'ai-voice-status';
 
   try {
-    let voiceId = document.getElementById('elVoiceId')?.value.trim() || '';
-    if (!voiceId) {
-      const sourceTake = [...E.takes].reverse().find(t => t.blob && !t.isAi);
-      if (sourceTake) {
-        statusEl.textContent = 'Klonlanıyor...'; statusEl.className = 'ai-voice-status';
-        voiceId = await cloneVoiceFromTake(apiKey, sourceTake).catch(() => '');
-        if (voiceId) {
-          document.getElementById('elVoiceId').value = voiceId;
-          localStorage.setItem('el_voice_id', voiceId);
-        }
-      }
-      if (!voiceId) voiceId = 'pNInz6obpgDQGcFmaJgB';
-    }
-    statusEl.textContent = 'Oluşturuluyor...'; statusEl.className = 'ai-voice-status';
     const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
