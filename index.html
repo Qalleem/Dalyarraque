@@ -106,6 +106,11 @@ html, body {
 .h-dot.on { background:var(--green-bright); box-shadow:0 0 6px var(--green); }
 .h-dot.warn { background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
 .h-dot.err { background:var(--rec-red); box-shadow:0 0 6px var(--rec-red); }
+@keyframes bpm-pulse {
+  0%   { background:var(--fl-orange); box-shadow:0 0 10px var(--fl-orange-glow); transform:scale(1.5); }
+  100% { background:rgba(255,109,0,0.25); box-shadow:none; transform:scale(1); }
+}
+.h-dot.bpm-pulse { animation: bpm-pulse 0.32s ease-out forwards; }
 .h-btn {
   width:32px; height:32px; border-radius:6px; border:1px solid var(--border);
   background:var(--surface2); color:var(--text2); display:flex;
@@ -359,6 +364,22 @@ html, body {
 .meter-peak-hold { position:absolute; top:0; bottom:0; width:2px; background:var(--text); left:0%; transition:left 100ms; }
 .meter-db { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); min-width:46px; text-align:right; }
 
+/* ─── FLOW METER ─── */
+.flow-meter-bar {
+  height:0; overflow:hidden; padding:0 12px; background:var(--bg);
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+  transition:height 0.2s;
+}
+.flow-meter-bar.active { height:20px; }
+.flow-meter-lbl { font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4); letter-spacing:1px; min-width:26px; }
+.flow-meter-track { flex:1; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; position:relative; }
+.flow-meter-fill {
+  position:absolute; inset:0; width:0%; border-radius:2px;
+  background:linear-gradient(90deg, var(--blue) 0%, var(--cyan) 35%, var(--green-bright) 65%, var(--yellow) 82%, var(--fl-orange) 100%);
+  transition:width 200ms ease-out;
+}
+.flow-meter-txt { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); min-width:56px; text-align:right; }
+
 /* ─── TRANSPORT ─── */
 .transport {
   display:flex; align-items:center; height:72px; padding:0 10px;
@@ -544,6 +565,7 @@ html, body {
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
     <div class="h-indicator"><div class="h-dot" id="saveDot"></div> DB</div>
+    <div class="h-indicator"><div class="h-dot" id="bpmDot"></div> <span id="bpmDotLabel">—</span></div>
     <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
     <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
   </div>
@@ -583,6 +605,13 @@ html, body {
         <div class="meter-peak-hold" id="meterPeakHold"></div>
       </div>
       <span class="meter-db" id="meterDb">-∞ dB</span>
+    </div>
+    <div class="flow-meter-bar" id="flowMeterBar">
+      <span class="flow-meter-lbl">FLOW</span>
+      <div class="flow-meter-track">
+        <div class="flow-meter-fill" id="flowMeterFill"></div>
+      </div>
+      <span class="flow-meter-txt" id="flowMeterTxt">—</span>
     </div>
   </div>
 
@@ -1376,7 +1405,11 @@ async function loadBeat(e) {
     document.getElementById('beatBtn').classList.add('loaded');
     document.getElementById('beatBtn').innerHTML = '♫ Beat';
     drawRuler();
-    toast('✓ Beat yüklendi', 'ok');
+    const detectedBpm = detectBPM(E.beatBuf);
+    document.getElementById('bpmInput').value = detectedBpm;
+    document.getElementById('bpmDotLabel').textContent = detectedBpm + ' BPM';
+    if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
+    toast(`✓ Beat yüklendi — ${detectedBpm} BPM`, 'ok');
   } catch (err) { toast('Beat decode hatası', 'err'); }
 }
 
@@ -1398,6 +1431,8 @@ function playBeat(offset) {
   E.beatPlaying = true;
   document.getElementById('tBeatPlay').textContent = '⏸';
   document.getElementById('tBeatPlay').classList.add('active');
+  const bpmVal = parseInt(document.getElementById('bpmInput').value || 140);
+  startBeatFlash(bpmVal);
 }
 
 function stopBeat() {
@@ -1409,6 +1444,7 @@ function stopBeat() {
   E.beatPlaying = false;
   document.getElementById('tBeatPlay').textContent = '▶';
   document.getElementById('tBeatPlay').classList.remove('active');
+  stopBeatFlash();
 }
 
 function stopAll() {
@@ -1479,6 +1515,7 @@ async function startRec() {
   document.getElementById('tRec').classList.add('recording');
   document.getElementById('tTimer').classList.add('recording');
   document.getElementById('tInfoMain').textContent = '● REC — Take ' + (E.takes.length + 1);
+  startFlowMeter();
   updateRecTimer();
   renderLanes();
 }
@@ -1490,6 +1527,7 @@ function stopRec() {
   E.recording = false;
   document.getElementById('tRec').classList.remove('recording');
   document.getElementById('tTimer').classList.remove('recording');
+  stopFlowMeter();
 }
 
 async function doPreRoll(beats) {
@@ -2130,6 +2168,141 @@ function setCf(mode) {
   ['cfCut','cfXfade','cfPunch'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById(mode === 'cut' ? 'cfCut' : mode === 'xfade' ? 'cfXfade' : 'cfPunch').classList.add('active');
   renderLanes();
+}
+
+// ═══ BPM DETECTION (onset autocorrelation) ═══
+function detectBPM(audioBuffer) {
+  const sr = audioBuffer.sampleRate;
+  const raw = audioBuffer.getChannelData(0);
+  const frameMs = 10;
+  const frameSize = Math.round(sr * frameMs / 1000);
+  const numFrames = Math.floor(raw.length / frameSize);
+  if (numFrames < 60) return 140;
+
+  // RMS envelope
+  const env = new Float32Array(numFrames);
+  for (let i = 0; i < numFrames; i++) {
+    let sum = 0;
+    const off = i * frameSize;
+    for (let j = 0; j < frameSize; j++) sum += raw[off + j] ** 2;
+    env[i] = Math.sqrt(sum / frameSize);
+  }
+
+  // Onset strength: positive first-order difference
+  const onset = new Float32Array(numFrames);
+  for (let i = 1; i < numFrames; i++) onset[i] = Math.max(0, env[i] - env[i - 1]);
+
+  // Autocorrelation in BPM range 60–200 (lag 30–100 frames at 10ms)
+  const minLag = Math.round(60000 / 200 / frameMs); // 30
+  const maxLag = Math.round(60000 / 60  / frameMs); // 100
+  const useFrames = Math.min(numFrames, 3000); // analyse first 30s max
+
+  let bestCorr = -1, bestLag = 60;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let corr = 0;
+    for (let i = 0; i < useFrames - lag; i++) corr += onset[i] * onset[i + lag];
+    corr /= (useFrames - lag);
+    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+  }
+
+  const bpm = Math.round(60000 / (bestLag * frameMs));
+  // Snap to common sub/double-time values
+  const candidates = [bpm, bpm * 2, Math.round(bpm / 2)];
+  const best = candidates.filter(b => b >= 60 && b <= 200).reduce((a, b) => {
+    const aDist = Math.abs(a - 140), bDist = Math.abs(b - 140); return aDist <= bDist ? a : b;
+  }, bpm);
+  return best;
+}
+
+// ═══ BEAT FLASH ═══
+let _beatFlashId = null;
+function startBeatFlash(bpm) {
+  stopBeatFlash();
+  if (!bpm || bpm < 20) return;
+  const period = 60000 / bpm;
+  triggerBeatFlash();
+  _beatFlashId = setInterval(triggerBeatFlash, period);
+}
+function stopBeatFlash() {
+  if (_beatFlashId) { clearInterval(_beatFlashId); _beatFlashId = null; }
+  const dot = document.getElementById('bpmDot');
+  if (dot) dot.classList.remove('bpm-pulse');
+}
+function triggerBeatFlash() {
+  const dot = document.getElementById('bpmDot');
+  if (!dot) return;
+  dot.classList.remove('bpm-pulse');
+  void dot.offsetWidth; // force reflow to restart animation
+  dot.classList.add('bpm-pulse');
+}
+
+// ═══ FLOW METER (real-time onset rate during recording) ═══
+let _flowRaf = null, _flowPrevSpec = null, _flowOnsets = 0, _flowWinStart = 0;
+const FLOW_WIN_MS = 2000;
+const FLOW_MIN_GAP_MS = 85;
+let _flowLastOnset = 0;
+
+function startFlowMeter() {
+  stopFlowMeter();
+  if (!E.analyser) return;
+  _flowOnsets = 0; _flowPrevSpec = null;
+  _flowWinStart = performance.now(); _flowLastOnset = 0;
+  const bar = document.getElementById('flowMeterBar');
+  if (bar) bar.classList.add('active');
+  const bufLen = E.analyser.frequencyBinCount;
+  const specBuf = new Uint8Array(bufLen);
+  const limit = Math.floor(bufLen * 0.55); // vocal freq range
+
+  function tick() {
+    if (!E.recording) return;
+    E.analyser.getByteFrequencyData(specBuf);
+    if (_flowPrevSpec) {
+      let flux = 0;
+      for (let i = 2; i < limit; i++) {
+        const d = specBuf[i] - _flowPrevSpec[i];
+        if (d > 0) flux += d;
+      }
+      const now = performance.now();
+      if (flux > 900 && (now - _flowLastOnset) > FLOW_MIN_GAP_MS) {
+        _flowOnsets++;
+        _flowLastOnset = now;
+      }
+    }
+    _flowPrevSpec = new Uint8Array(specBuf);
+
+    const elapsed = performance.now() - _flowWinStart;
+    if (elapsed >= FLOW_WIN_MS) {
+      const rate = _flowOnsets / (elapsed / 1000);
+      updateFlowDisplay(rate);
+      _flowOnsets = 0; _flowWinStart = performance.now();
+    }
+    _flowRaf = requestAnimationFrame(tick);
+  }
+  _flowRaf = requestAnimationFrame(tick);
+}
+
+function stopFlowMeter() {
+  if (_flowRaf) { cancelAnimationFrame(_flowRaf); _flowRaf = null; }
+  _flowPrevSpec = null; _flowOnsets = 0;
+  const bar = document.getElementById('flowMeterBar');
+  const fill = document.getElementById('flowMeterFill');
+  const txt = document.getElementById('flowMeterTxt');
+  if (bar) bar.classList.remove('active');
+  if (fill) fill.style.width = '0%';
+  if (txt) txt.textContent = '—';
+}
+
+function updateFlowDisplay(rate) {
+  const fill = document.getElementById('flowMeterFill');
+  const txt = document.getElementById('flowMeterTxt');
+  if (!fill || !txt) return;
+  let label, pct;
+  if      (rate < 1.8) { label = 'SLOW'; pct = 18; }
+  else if (rate < 3.2) { label = 'MED';  pct = 44; }
+  else if (rate < 5.0) { label = 'FAST'; pct = 70; }
+  else                 { label = 'FIRE'; pct = 96; }
+  fill.style.width = pct + '%';
+  txt.textContent = label + ' ' + rate.toFixed(1) + '/s';
 }
 
 // ═══ AUTO TRANSITION ANALYSIS ═══
