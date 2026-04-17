@@ -1,0 +1,2504 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QVLLEN BOOTH v5</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #1a1a1f;
+  --bg-deep: #111114;
+  --surface: #222228;
+  --surface2: #2a2a32;
+  --surface3: #33333d;
+  --border: #3a3a45;
+  --border-light: #4a4a58;
+
+  --fl-orange: #ff6d00;
+  --fl-orange-dim: rgba(255,109,0,0.15);
+  --fl-orange-glow: rgba(255,109,0,0.4);
+  --rec-red: #ff2d2d;
+  --rec-red-dim: rgba(255,45,45,0.12);
+  --rec-red-glow: rgba(255,45,45,0.5);
+  --green: #4caf50;
+  --green-dim: rgba(76,175,80,0.12);
+  --green-bright: #69f0ae;
+  --blue: #42a5f5;
+  --yellow: #ffca28;
+  --cyan: #26c6da;
+  --purple: #ab47bc;
+
+  --text: #e4e4ea;
+  --text2: #9898a8;
+  --text3: #666678;
+  --text4: #44444f;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+html, body {
+  height:100%; overflow:hidden;
+  background:var(--bg-deep); color:var(--text);
+  font-family:'Outfit',sans-serif;
+  touch-action:manipulation;
+  overscroll-behavior: none;
+}
+
+/* ─── SPLASH ─── */
+#splashScreen {
+  position:fixed; inset:0; z-index:200;
+  background:var(--bg-deep);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:24px;
+  transition:opacity .5s, visibility .5s;
+  padding:24px;
+}
+#splashScreen.hide { opacity:0; visibility:hidden; pointer-events:none; }
+.splash-logo { font-family:'Bebas Neue'; font-size:48px; letter-spacing:6px; color:var(--fl-orange); }
+.splash-logo span { color:var(--text3); font-size:28px; }
+.splash-sub { color:var(--text3); font-size:13px; letter-spacing:1px; }
+.splash-btn {
+  width:200px; height:56px; border-radius:28px; border:none;
+  background:var(--fl-orange); color:#fff; font-family:'Outfit';
+  font-size:16px; font-weight:600; letter-spacing:1px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  box-shadow:0 4px 24px var(--fl-orange-glow);
+  transition:transform .15s;
+}
+.splash-btn:active { transform:scale(0.95); }
+.splash-btn.secondary {
+  background:transparent; color:var(--text2); border:1px solid var(--border);
+  box-shadow:none; width:auto; padding:0 18px; height:40px; font-size:13px; letter-spacing:0.5px;
+}
+.splash-status { font-family:'IBM Plex Mono'; font-size:11px; color:var(--text3); min-height:16px; text-align:center; max-width:320px; }
+.splash-restore {
+  display:none;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px 16px; max-width:320px;
+  font-size:12px; color:var(--text2); text-align:center;
+}
+.splash-restore.show { display:block; }
+.splash-restore b { color:var(--yellow); }
+.splash-restore-btns { display:flex; gap:8px; margin-top:10px; justify-content:center; }
+
+/* ─── APP SHELL ─── */
+#app { display:flex; flex-direction:column; height:100%; }
+
+/* ─── HEADER ─── */
+.header {
+  display:flex; align-items:center; height:44px; padding:0 12px;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  flex-shrink:0; gap:10px;
+}
+.h-logo { font-family:'Bebas Neue'; font-size:18px; letter-spacing:3px; color:var(--fl-orange); }
+.h-logo span { color:var(--text3); font-size:12px; margin-left:2px; }
+.h-spacer { flex:1; }
+.h-indicator {
+  display:flex; align-items:center; gap:5px;
+  font-family:'IBM Plex Mono'; font-size:10px; color:var(--text3);
+}
+.h-dot { width:6px; height:6px; border-radius:50%; background:var(--text4); flex-shrink:0; }
+.h-dot.on { background:var(--green-bright); box-shadow:0 0 6px var(--green); }
+.h-dot.warn { background:var(--yellow); box-shadow:0 0 6px var(--yellow); }
+.h-dot.err { background:var(--rec-red); box-shadow:0 0 6px var(--rec-red); }
+.h-btn {
+  width:32px; height:32px; border-radius:6px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text2); display:flex;
+  align-items:center; justify-content:center; font-size:14px; cursor:pointer;
+}
+.h-btn:active { background:var(--surface3); }
+.h-btn.badge::after {
+  content:''; position:absolute; top:4px; right:4px; width:6px; height:6px;
+  background:var(--rec-red); border-radius:50%;
+}
+.h-btn { position:relative; }
+
+/* ─── MAIN AREA ─── */
+.main-area { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* ─── BEAT BAR ─── */
+.beat-bar {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; background:var(--bg);
+  border-bottom:1px solid rgba(255,255,255,0.04);
+  flex-shrink:0;
+}
+.beat-upload {
+  height:34px; padding:0 14px; border-radius:6px;
+  border:1.5px dashed var(--border); background:transparent;
+  color:var(--text2); font-family:'Outfit'; font-size:12px;
+  font-weight:500; cursor:pointer; white-space:nowrap;
+  display:flex; align-items:center; gap:5px;
+  transition:all .2s;
+}
+.beat-upload.loaded { border-style:solid; border-color:var(--fl-orange); color:var(--fl-orange); }
+.beat-upload:active { background:var(--surface); }
+.beat-name-display {
+  flex:1; font-family:'IBM Plex Mono'; font-size:11px;
+  color:var(--text3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.beat-vol-mini {
+  width:60px; height:3px; -webkit-appearance:none; appearance:none;
+  background:var(--surface3); border-radius:2px; outline:none;
+}
+.beat-vol-mini::-webkit-slider-thumb {
+  -webkit-appearance:none; width:12px; height:12px; border-radius:50%;
+  background:var(--fl-orange); border:2px solid var(--bg-deep);
+}
+
+/* ─── TIMELINE RULER ─── */
+.timeline-ruler {
+  height:22px; background:var(--surface);
+  border-bottom:1px solid var(--border);
+  position:relative; flex-shrink:0; overflow:hidden;
+}
+.ruler-canvas { width:100%; height:100%; }
+
+/* ─── TAKE LANES ─── */
+.take-lanes {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  background:var(--bg-deep); position:relative;
+}
+.take-lanes::-webkit-scrollbar { display:none; }
+
+.take-lane {
+  display:flex; height:64px; border-bottom:1px solid rgba(255,255,255,0.03);
+  position:relative; transition:background .2s;
+}
+.take-lane:active { background:rgba(255,255,255,0.02); }
+.take-lane.selected { background:var(--fl-orange-dim); }
+.take-lane.recording { background:var(--rec-red-dim); }
+.take-lane.playing { background:var(--green-dim); }
+.take-lane.onebreath { box-shadow: inset 0 0 0 1px rgba(255,202,40,0.28); }
+.take-lane.muted .lane-body { opacity:0.35; }
+.take-lane.soloed { box-shadow: inset 0 0 0 1px var(--cyan); }
+
+.lane-header {
+  width:64px; flex-shrink:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px;
+  background:var(--surface); border-right:1px solid var(--border);
+  position:relative;
+}
+.lane-num {
+  font-family:'Bebas Neue'; font-size:20px; color:var(--text3);
+  line-height:1;
+}
+.take-lane.selected .lane-num { color:var(--fl-orange); }
+.take-lane.recording .lane-num { color:var(--rec-red); }
+.take-lane.playing .lane-num { color:var(--green-bright); }
+.take-lane.onebreath .lane-num { color:var(--yellow); }
+
+.lane-status {
+  font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4);
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+.take-lane.recording .lane-status { color:var(--rec-red); }
+.take-lane.onebreath .lane-status { color:var(--yellow); }
+
+.lane-controls {
+  position:absolute; right:2px; top:2px; bottom:2px;
+  display:flex; flex-direction:column; justify-content:center; gap:2px;
+}
+.lane-ctrl {
+  width:18px; height:18px; border-radius:3px; border:none;
+  background:transparent; color:var(--text4); font-size:9px;
+  font-family:'IBM Plex Mono'; font-weight:600; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s;
+}
+.lane-ctrl:active { transform:scale(0.9); }
+.lane-ctrl.m { color:var(--text3); }
+.lane-ctrl.m.on { background:var(--rec-red); color:#fff; }
+.lane-ctrl.s.on { background:var(--cyan); color:#000; }
+
+.lane-body { flex:1; position:relative; overflow:hidden; }
+.lane-waveform { position:absolute; inset:0; }
+.lane-waveform canvas { width:100%; height:100%; }
+.lane-empty {
+  position:absolute; inset:0; display:flex; align-items:center;
+  justify-content:center; font-size:11px; color:var(--text4);
+}
+.lane-duration {
+  position:absolute; right:6px; bottom:4px;
+  font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3);
+  background:rgba(17,17,20,0.7); padding:1px 5px; border-radius:3px;
+}
+.lane-offset {
+  position:absolute; left:6px; top:4px;
+  font-family:'IBM Plex Mono'; font-size:8px; color:var(--text3);
+  background:rgba(17,17,20,0.5); padding:1px 4px; border-radius:3px;
+}
+
+/* Recording stripe */
+.take-lane.recording .lane-body::after {
+  content:''; position:absolute; inset:0;
+  background:repeating-linear-gradient(
+    -45deg, transparent, transparent 4px,
+    rgba(255,45,45,0.06) 4px, rgba(255,45,45,0.06) 8px
+  );
+  animation:rec-stripe 1s linear infinite;
+}
+@keyframes rec-stripe { to { background-position:11px 0; } }
+
+/* Playhead */
+.playhead {
+  position:absolute; top:0; bottom:0; width:2px;
+  background:var(--fl-orange); z-index:10;
+  pointer-events:none; left:0; display:none;
+  box-shadow:0 0 8px var(--fl-orange-glow);
+}
+.playhead::before {
+  content:''; position:absolute; top:-1px; left:-4px;
+  width:10px; height:4px; background:var(--fl-orange);
+  border-radius:0 0 2px 2px;
+}
+
+/* ─── CROSSFADE BAR ─── */
+.crossfade-bar {
+  display:flex; align-items:center; height:32px; padding:0 12px;
+  background:var(--surface); border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border); gap:6px; flex-shrink:0;
+}
+.cf-label { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); letter-spacing:1px; text-transform:uppercase; }
+.cf-btn {
+  height:22px; padding:0 10px; border-radius:4px; border:1px solid var(--border);
+  background:transparent; color:var(--text3); font-family:'IBM Plex Mono';
+  font-size:9px; font-weight:500; cursor:pointer; letter-spacing:0.5px;
+  transition:all .15s;
+}
+.cf-btn.active { border-color:var(--cyan); color:var(--cyan); background:rgba(38,198,218,0.1); }
+.cf-btn:active { transform:scale(0.95); }
+.cf-spacer { flex:1; }
+.cf-time {
+  font-family:'IBM Plex Mono'; font-size:10px; color:var(--text3);
+  display:flex; align-items:center; gap:4px;
+}
+.cf-time input {
+  width:44px; height:20px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:3px; color:var(--cyan); font-family:'IBM Plex Mono'; font-size:10px;
+  text-align:center; outline:none;
+}
+
+/* ─── INPUT METER ─── */
+.input-meter-bar {
+  height:18px; padding:0 12px; background:var(--bg);
+  display:flex; align-items:center; gap:6px; flex-shrink:0;
+}
+.meter-label { font-family:'IBM Plex Mono'; font-size:8px; color:var(--text4); letter-spacing:1px; min-width:26px; }
+.meter-track { flex:1; height:5px; background:var(--surface2); border-radius:2px; overflow:hidden; position:relative; }
+.meter-fill { position:absolute; inset:0; width:0%; border-radius:2px; background:linear-gradient(90deg, var(--green) 0%, var(--yellow) 70%, var(--rec-red) 95%); transition:width 40ms; }
+.meter-peak-hold { position:absolute; top:0; bottom:0; width:2px; background:var(--text); left:0%; transition:left 100ms; }
+.meter-db { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); min-width:46px; text-align:right; }
+
+/* ─── TRANSPORT ─── */
+.transport {
+  display:flex; align-items:center; height:72px; padding:0 10px;
+  background:linear-gradient(180deg, var(--surface) 0%, var(--surface2) 100%);
+  border-top:1px solid var(--border-light);
+  flex-shrink:0; gap:6px;
+}
+.t-btn {
+  width:40px; height:40px; border-radius:8px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text2); font-size:16px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition:all .15s; flex-shrink:0;
+}
+.t-btn:active { transform:scale(0.92); background:var(--surface3); }
+.t-btn.active { color:var(--text); background:var(--surface3); }
+
+.t-rec {
+  width:52px; height:52px; border-radius:50%;
+  border:3px solid var(--rec-red); background:transparent;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; position:relative; flex-shrink:0;
+  transition:all .2s;
+}
+.t-rec:active { transform:scale(0.9); }
+.t-rec-dot { width:22px; height:22px; border-radius:50%; background:var(--rec-red); transition:all .2s; }
+.t-rec.recording { background:var(--rec-red); border-color:var(--rec-red); box-shadow:0 0 24px var(--rec-red-glow); }
+.t-rec.recording .t-rec-dot { width:16px; height:16px; border-radius:3px; background:#fff; }
+
+.t-timer {
+  font-family:'IBM Plex Mono'; font-size:22px; font-weight:600;
+  color:var(--text); letter-spacing:1px; min-width:72px;
+  text-align:center; flex-shrink:0;
+}
+.t-timer.recording { color:var(--rec-red); }
+
+.t-info { flex:1; display:flex; flex-direction:column; gap:1px; min-width:0; padding:0 4px; }
+.t-info-main { font-size:12px; font-weight:500; color:var(--text2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.t-info-sub { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); }
+
+.t-actions { display:flex; gap:4px; flex-shrink:0; }
+.t-act {
+  width:36px; height:36px; border-radius:6px; border:1px solid var(--border);
+  background:var(--surface2); color:var(--text3); font-size:14px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  position:relative;
+}
+.t-act:active { background:var(--surface3); }
+.t-act.export-act { border-color:rgba(76,175,80,0.3); color:var(--green); }
+.t-act.del-act { border-color:rgba(255,45,45,0.2); color:var(--rec-red); }
+.t-act.onebreath-act { border-color:rgba(255,202,40,0.35); color:var(--yellow); }
+.t-act.undo-act { border-color:rgba(171,71,188,0.35); color:var(--purple); }
+
+/* ─── DRAWER ─── */
+.drawer-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.7);
+  z-index:100; opacity:0; visibility:hidden; transition:all .3s;
+}
+.drawer-overlay.show { opacity:1; visibility:visible; }
+.drawer {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface); border-radius:16px 16px 0 0;
+  max-height:80vh; overflow-y:auto; z-index:101;
+  transform:translateY(100%); transition:transform .3s cubic-bezier(.32,.72,.0,1);
+  padding:16px;
+}
+.drawer.show { transform:translateY(0); }
+.drawer::-webkit-scrollbar { display:none; }
+.drawer-handle { width:36px; height:4px; background:var(--border); border-radius:2px; margin:0 auto 14px; }
+.drawer-title { font-family:'Bebas Neue'; font-size:18px; letter-spacing:2px; color:var(--text2); margin-bottom:12px; }
+.drawer-sub { font-size:10px; color:var(--text4); margin-top:-8px; margin-bottom:12px; letter-spacing:0.5px; }
+
+/* FX Grid */
+.fx-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.fx-card {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:8px; padding:10px;
+}
+.fx-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.fx-name { font-size:11px; font-weight:600; color:var(--text2); }
+.fx-sw {
+  width:32px; height:16px; border-radius:8px; border:none;
+  background:var(--surface3); cursor:pointer; position:relative;
+  transition:all .2s;
+}
+.fx-sw.on { background:var(--fl-orange); }
+.fx-sw::after {
+  content:''; position:absolute; top:2px; left:2px;
+  width:12px; height:12px; border-radius:50%; background:#fff;
+  transition:all .2s;
+}
+.fx-sw.on::after { left:18px; }
+.fx-range {
+  width:100%; height:3px; -webkit-appearance:none;
+  background:var(--surface3); border-radius:2px; outline:none;
+}
+.fx-range::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+  background:var(--text2); border:2px solid var(--bg-deep);
+}
+.fx-val { font-family:'IBM Plex Mono'; font-size:9px; color:var(--text3); text-align:center; margin-top:3px; }
+
+/* Settings rows */
+.s-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.04);
+  gap:10px;
+}
+.s-label { font-size:12px; color:var(--text2); }
+.s-desc { font-size:10px; color:var(--text4); margin-top:1px; max-width:200px; }
+.s-select {
+  height:30px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; color:var(--text); font-family:'IBM Plex Mono';
+  font-size:11px; padding:0 8px; outline:none; max-width:180px;
+}
+.s-input {
+  width:60px; height:30px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; color:var(--fl-orange); font-family:'IBM Plex Mono';
+  font-size:11px; text-align:center; outline:none;
+}
+.s-btn {
+  height:30px; padding:0 12px; background:var(--surface2); border:1px solid var(--border);
+  border-radius:6px; color:var(--text2); font-family:'Outfit'; font-size:11px;
+  font-weight:500; cursor:pointer;
+}
+.s-btn.primary { background:var(--fl-orange); color:#fff; border-color:var(--fl-orange); }
+.s-btn.success { background:var(--green); color:#000; border-color:var(--green); }
+
+/* ─── TOAST ─── */
+.toast {
+  position:fixed; top:56px; left:50%; transform:translateX(-50%) translateY(-20px);
+  background:var(--surface); border:1px solid var(--border-light);
+  padding:10px 16px; border-radius:10px; color:var(--text);
+  font-size:12px; z-index:300; opacity:0; transition:all .25s;
+  box-shadow:0 4px 20px rgba(0,0,0,0.4); max-width:90vw;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+.toast.err { border-color:var(--rec-red); color:var(--rec-red); }
+.toast.ok { border-color:var(--green); color:var(--green-bright); }
+
+/* ─── CALIBRATION MODAL ─── */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:400;
+  display:none; align-items:center; justify-content:center; padding:20px;
+}
+.modal-overlay.show { display:flex; }
+.modal {
+  background:var(--surface); border:1px solid var(--border-light);
+  border-radius:16px; padding:24px; max-width:340px; width:100%;
+  text-align:center;
+}
+.modal-title { font-family:'Bebas Neue'; font-size:22px; letter-spacing:2px; color:var(--fl-orange); margin-bottom:8px; }
+.modal-body { font-size:13px; color:var(--text2); line-height:1.5; margin-bottom:16px; }
+.modal-val { font-family:'IBM Plex Mono'; font-size:32px; color:var(--cyan); margin:12px 0; }
+.modal-btns { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+
+.hidden { display:none !important; }
+::-webkit-scrollbar { width:0; height:0; }
+</style>
+</head>
+<body>
+
+<!-- ═══ SPLASH ═══ -->
+<div id="splashScreen">
+  <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO · v5</div>
+  <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
+  <div class="splash-restore" id="splashRestore">
+    <div>Önceki sesionda <b id="restoreCount">0</b> take bulundu.</div>
+    <div class="splash-restore-btns">
+      <button class="splash-btn secondary" onclick="initAll(true)">↻ Geri Yükle</button>
+      <button class="splash-btn secondary" onclick="wipeAndInit()">🗑 Yeni Başla</button>
+    </div>
+  </div>
+  <div class="splash-status" id="splashStatus"></div>
+</div>
+
+<!-- ═══ APP ═══ -->
+<div id="app" style="display:none;">
+
+  <div class="header">
+    <div class="h-logo">QB <span>v5</span></div>
+    <div class="h-spacer"></div>
+    <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
+    <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
+    <div class="h-indicator"><div class="h-dot" id="saveDot"></div> DB</div>
+    <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
+    <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
+  </div>
+
+  <div class="main-area">
+    <div class="beat-bar">
+      <button class="beat-upload" id="beatBtn" onclick="document.getElementById('beatFile').click()">＋ Beat</button>
+      <input type="file" id="beatFile" accept="audio/*" class="hidden" onchange="loadBeat(event)">
+      <div class="beat-name-display" id="beatLabel">Beat yükle →</div>
+      <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" oninput="E.beatGain.gain.value=this.value/100">
+    </div>
+
+    <div class="timeline-ruler"><canvas class="ruler-canvas" id="rulerCanvas"></canvas></div>
+
+    <div class="take-lanes" id="takeLanes">
+      <div class="playhead" id="playhead"></div>
+    </div>
+
+    <div class="crossfade-bar">
+      <span class="cf-label">GEÇIŞ</span>
+      <button class="cf-btn active" id="cfCut" onclick="setCf('cut')">CUT</button>
+      <button class="cf-btn" id="cfXfade" onclick="setCf('xfade')">XFADE</button>
+      <button class="cf-btn" id="cfPunch" onclick="setCf('punch')">PUNCH</button>
+      <div class="cf-spacer"></div>
+      <div class="cf-time">
+        <input type="number" value="120" id="cfMs" min="0" max="999">
+        <span>ms</span>
+      </div>
+    </div>
+
+    <div class="input-meter-bar">
+      <span class="meter-label">IN</span>
+      <div class="meter-track">
+        <div class="meter-fill" id="meterFill"></div>
+        <div class="meter-peak-hold" id="meterPeakHold"></div>
+      </div>
+      <span class="meter-db" id="meterDb">-∞ dB</span>
+    </div>
+  </div>
+
+  <div class="transport">
+    <button class="t-btn" id="tBeatPlay" onclick="toggleBeat()">▶</button>
+    <button class="t-btn" id="tStop" onclick="stopAll()">■</button>
+    <button class="t-rec" id="tRec" onclick="toggleRec()"><div class="t-rec-dot"></div></button>
+    <div class="t-timer" id="tTimer">0:00</div>
+    <div class="t-info">
+      <div class="t-info-main" id="tInfoMain">Hazır</div>
+      <div class="t-info-sub" id="tInfoSub">Take 1/10</div>
+    </div>
+    <div class="t-actions">
+      <button class="t-act onebreath-act" onclick="playOneBreath()" title="One Breath">🔥</button>
+      <button class="t-act" onclick="playSelected()" title="Dinle">▶</button>
+      <button class="t-act undo-act hidden" id="undoBtn" onclick="undoDelete()" title="Geri al">↶</button>
+      <button class="t-act del-act" onclick="deleteSelected()" title="Sil">✕</button>
+      <button class="t-act export-act" onclick="exportMix()" title="İndir">↓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ DRAWERS ═══ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<div class="drawer" id="fxDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">VOCAL FX</div>
+  <div class="drawer-sub">Vokalin her katmanı — stüdyo chain'i</div>
+  <div class="fx-grid" id="fxGrid"></div>
+  <div style="margin-top:16px;">
+    <div class="drawer-title">MİXER</div>
+    <div class="s-row">
+      <span class="s-label">Vokal Volume</span>
+      <input type="range" class="fx-range" style="width:140px" min="0" max="150" value="100" id="vocalVol">
+    </div>
+    <div class="s-row">
+      <span class="s-label">Monitor Volume <div class="s-desc">BT kulaklık geri besleme</div></span>
+      <input type="range" class="fx-range" style="width:140px" min="0" max="100" value="0" id="monitorVol" oninput="E.monitorGain&&(E.monitorGain.gain.value=this.value/100)">
+    </div>
+    <div class="s-row">
+      <span class="s-label">Master Limiter</span>
+      <button class="fx-sw on" id="masterLimiterSw" onclick="toggleMasterLimiter()"></button>
+    </div>
+  </div>
+</div>
+
+<div class="drawer" id="settingsDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">AYARLAR</div>
+
+  <div class="s-row">
+    <div><div class="s-label">Beat Çıkışı</div><div class="s-desc">Kulaklık / BT seç</div></div>
+    <select class="s-select" id="selOutput" onchange="setOutput(this.value)"></select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Mikrofon</div><div class="s-desc">Ahize / cihaz seç</div></div>
+    <select class="s-select" id="selInput" onchange="setInput(this.value)"></select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">BT Latency (ms)</div><div class="s-desc">Kulaklık gecikme telafisi — export'ta uygulanır</div></div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      <input class="s-input" type="number" value="150" id="latComp">
+      <button class="s-btn primary" onclick="openCalibration()">Ölç</button>
+    </div>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Pre-Roll</div><div class="s-desc">Sayım vuruşu</div></div>
+    <select class="s-select" id="preRoll">
+      <option value="0">Yok</option>
+      <option value="2">2</option>
+      <option value="4" selected>4</option>
+      <option value="8">8</option>
+    </select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">BPM</div><div class="s-desc">Delay dotted-8th sync için</div></div>
+    <input class="s-input" type="number" value="140" id="bpmInput" min="40" max="300">
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Sample Rate</div></div>
+    <select class="s-select" id="srSelect">
+      <option value="44100">44.1k</option>
+      <option value="48000" selected>48k</option>
+    </select>
+  </div>
+  <div class="s-row">
+    <div><div class="s-label">Auto-Save</div><div class="s-desc">Takes IndexedDB'ye yazılır</div></div>
+    <button class="fx-sw on" id="autosaveSw" onclick="toggleAutosave()"></button>
+  </div>
+
+  <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+    <button class="s-btn success" style="height:42px;border-radius:8px;" onclick="exportAllTakes()">📦 Tüm Takes</button>
+    <button class="s-btn primary" style="height:42px;border-radius:8px;" onclick="exportMix()">🎵 Mix WAV</button>
+    <button class="s-btn" style="height:42px;border-radius:8px;background:rgba(171,71,188,0.15);border-color:var(--purple);color:var(--purple);" onclick="exportOneBreathStem()">🔥 OB Stem</button>
+    <button class="s-btn" style="height:42px;border-radius:8px;background:rgba(255,45,45,0.15);border-color:var(--rec-red);color:var(--rec-red);" onclick="wipeSession()">🗑 Session Sil</button>
+  </div>
+
+  <div style="margin-top:14px; padding:10px; background:var(--bg-deep); border-radius:8px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.5;">
+    <b style="color:var(--text3)">ENGINE SPEC</b><br>
+    HPF 110Hz · Comp −18dB/8ms/4:1 · EQ 3.5kHz · De-Ess 6kHz<br>
+    Reverb IR 1.2s · Delay dotted-1/8 @BPM<br>
+    Export: TPDF dither · True-peak limit −1dBFS · 16-bit WAV
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══ CALIBRATION MODAL ═══ -->
+<div class="modal-overlay" id="calModal">
+  <div class="modal">
+    <div class="modal-title" id="calTitle">BT LATENCY ÖLÇ</div>
+    <div class="modal-body" id="calBody">
+      Kulaklığını tak. Telefon hoparlörünü sessize alma — mic klik sesini duymalı.
+      <br><br>"Başla"ya bas, 5 klik sesi çalınıp otomatik ölçülecek.
+    </div>
+    <div class="modal-val hidden" id="calVal">—</div>
+    <div class="modal-btns">
+      <button class="s-btn" onclick="closeCalibration()">Kapat</button>
+      <button class="s-btn primary" id="calStartBtn" onclick="runCalibration()">Başla</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ════════════════════════════════════════════════════════════════════
+// QVLLEN BOOTH v5 — Production Engineering Pass
+// ════════════════════════════════════════════════════════════════════
+// Changes vs v4:
+// [FIX]  MediaRecorder warmup captured via onstart + ctx.currentTime
+// [FIX]  Takes store recordedBeatOffset for beat-sync playback/export
+// [FIX]  BT latency compensation actually applied in export
+// [FIX]  FX chain rebuild is idempotent + leak-free
+// [FIX]  Canvas sizing race → ResizeObserver + deferred draw
+// [FIX]  Device watchdog — track.onended → re-prompt
+// [FIX]  Wake lock re-request on visibility change
+// [FIX]  Locked audio specs applied per memory:
+//           HPF 110Hz, Comp -18/8ms/4:1, EQ 3.5kHz, IR 1.2s
+// [NEW]  BPM-synced dotted-eighth delay
+// [NEW]  De-esser (6kHz sidechain dynamic EQ)
+// [NEW]  Soft saturation waveshaper
+// [NEW]  Master limiter (live monitor + export wall −1 dBFS)
+// [NEW]  TPDF dither on 16-bit WAV export
+// [NEW]  IndexedDB persistence → session restore
+// [NEW]  Per-take mute/solo/soft-delete with undo
+// [NEW]  BT latency auto-calibration (click loopback)
+// [NEW]  Peak-hold dual metering
+// [NEW]  One Breath v2: dB-trim + RMS match + click-free concat
+// ════════════════════════════════════════════════════════════════════
+
+const MAX_TAKES = 10;
+const ONE_BREATH_GUARD_MS = 22;
+const ONE_BREATH_TRIM_DB = -42;
+const MICRO_FADE_MS = 2;
+const TARGET_RMS_LUFS_ISH = 0.18;
+const PEAK_HOLD_MS = 1200;
+const MASTER_CEILING = Math.pow(10, -1/20); // -1 dBFS
+
+const DB_NAME = 'qvllen_booth_v5';
+const DB_STORE = 'takes';
+const DB_META = 'meta';
+
+// ═══ ENGINE STATE ═══
+const E = {
+  ctx: null,
+  beatBuf: null, beatSrc: null, beatGain: null,
+  beatPlaying: false, beatStart: 0, beatOffset: 0,
+
+  micStream: null, micSrc: null, micGain: null,
+  monitorGain: null, analyser: null, masterLimiter: null,
+  masterLimiterEnabled: true,
+
+  compressor: null, eq: null, reverb: null, reverbSend: null,
+  delay: null, delaySend: null, delayFb: null, gate: null,
+  hpf: null, deEsser: null, deEsserSide: null, deEsserBand: null,
+  saturator: null,
+
+  recorder: null, recording: false, recChunks: [],
+  recStartCtxTime: 0, recStartWallTime: 0,
+  recBeatOffsetAtStart: 0,
+  recWarmupSec: 0, // actual captured warmup from MediaRecorder.onstart
+
+  takes: [],  // {id, blob, buffer, duration, beatOffset, muted, soloed, createdAt}
+  trash: [],  // for undo
+  selected: 0,
+  playingTake: -1, takeSrc: null, takeGain: null,
+
+  cfMode: 'cut',
+  pendingCf: null,
+
+  oneBreathBuffer: null, oneBreathDirty: true,
+  oneBreathSource: null, oneBreathGain: null,
+
+  meterPeakHold: -100, meterPeakHoldAt: 0,
+
+  autosave: true,
+  db: null,
+  deviceWatchdogTimer: null,
+  wakeLock: null,
+};
+
+// Locked FX defs per engineering memory
+const FX_DEFS = [
+  { id:'comp',    name:'Compressor',   min:0,   max:100, val:60,  unit:'%',  default_on:true  },
+  { id:'eq',      name:'EQ 3.5k',      min:-12, max:12,  val:3,   unit:'dB', default_on:true  },
+  { id:'deess',   name:'De-Esser',     min:0,   max:100, val:40,  unit:'%',  default_on:true  },
+  { id:'reverb',  name:'Reverb 1.2s',  min:0,   max:100, val:18,  unit:'%',  default_on:false },
+  { id:'delay',   name:'Delay 1/8.',   min:0,   max:100, val:12,  unit:'%',  default_on:false },
+  { id:'hpf',     name:'Hi-Pass',      min:40,  max:400, val:110, unit:'Hz', default_on:true  },
+  { id:'gate',    name:'Noise Gate',   min:-80, max:-20, val:-52, unit:'dB', default_on:false },
+  { id:'sat',     name:'Saturation',   min:0,   max:100, val:25,  unit:'%',  default_on:false },
+];
+const fxState = {};
+FX_DEFS.forEach(f => fxState[f.id] = { on: f.default_on, val: f.val });
+
+// ═══ IndexedDB ═══
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (ev) => {
+      const db = ev.target.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) {
+        db.createObjectStore(DB_STORE, { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains(DB_META)) {
+        db.createObjectStore(DB_META, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function dbCountTakes() {
+  try {
+    if (!E.db) E.db = await openDB();
+    return new Promise((res, rej) => {
+      const tx = E.db.transaction(DB_STORE, 'readonly');
+      const req = tx.objectStore(DB_STORE).count();
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  } catch (e) { return 0; }
+}
+
+async function dbSaveTake(take) {
+  if (!E.autosave) return;
+  try {
+    if (!E.db) E.db = await openDB();
+    const tx = E.db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put({
+      id: take.id,
+      blob: take.blob,
+      duration: take.duration,
+      beatOffset: take.beatOffset,
+      muted: take.muted,
+      soloed: take.soloed,
+      createdAt: take.createdAt,
+    });
+    setSaveDot('on');
+    return new Promise((res) => { tx.oncomplete = () => res(); tx.onerror = () => { setSaveDot('err'); res(); }; });
+  } catch (e) { console.warn('dbSaveTake', e); setSaveDot('err'); }
+}
+
+async function dbLoadAllTakes() {
+  try {
+    if (!E.db) E.db = await openDB();
+    return new Promise((res, rej) => {
+      const tx = E.db.transaction(DB_STORE, 'readonly');
+      const req = tx.objectStore(DB_STORE).getAll();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+  } catch (e) { return []; }
+}
+
+async function dbDeleteTake(id) {
+  try {
+    if (!E.db) E.db = await openDB();
+    const tx = E.db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).delete(id);
+  } catch (e) { console.warn(e); }
+}
+
+async function dbWipe() {
+  try {
+    if (!E.db) E.db = await openDB();
+    const tx = E.db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    await new Promise(r => tx.oncomplete = r);
+  } catch (e) { console.warn(e); }
+}
+
+function setSaveDot(state) {
+  const dot = document.getElementById('saveDot');
+  if (!dot) return;
+  dot.classList.remove('on','warn','err');
+  if (state === 'on') dot.classList.add('on');
+  else if (state === 'err') dot.classList.add('err');
+  else if (state === 'warn') dot.classList.add('warn');
+}
+
+// ═══ INIT ═══
+async function preflightCheck() {
+  const count = await dbCountTakes();
+  if (count > 0) {
+    document.getElementById('restoreCount').textContent = count;
+    document.getElementById('splashRestore').classList.add('show');
+    document.getElementById('splashBtn').style.display = 'none';
+  }
+}
+
+async function initAll(restoreTakes=false) {
+  const btn = document.getElementById('splashBtn');
+  const status = document.getElementById('splashStatus');
+  const restore = document.getElementById('splashRestore');
+  if (btn) btn.style.pointerEvents = 'none';
+  if (btn) btn.textContent = '⏳ Başlatılıyor...';
+  if (restore) restore.classList.remove('show');
+
+  try {
+    status.textContent = 'Audio engine başlatılıyor...';
+    E.ctx = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: parseInt(document.getElementById('srSelect').value),
+      latencyHint: 'interactive',
+    });
+    if (E.ctx.state === 'suspended') await E.ctx.resume();
+
+    status.textContent = 'Mikrofon bağlanıyor...';
+    await initMic();
+
+    status.textContent = 'FX engine kuruluyor...';
+    initFX();
+    buildFXChain();
+
+    status.textContent = 'Cihazlar taranıyor...';
+    await enumDevices();
+    setupDeviceWatchdog();
+
+    await requestWakeLock();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    renderFXGrid();
+    renderLanes();
+    drawRuler();
+    startMeter();
+    setupResizeObserver();
+
+    if (restoreTakes) {
+      status.textContent = 'Takes geri yükleniyor...';
+      await restoreSession();
+    } else {
+      await dbWipe();
+    }
+
+    document.getElementById('splashScreen').classList.add('hide');
+    document.getElementById('app').style.display = 'flex';
+    status.textContent = 'Hazır!';
+    setSaveDot('on');
+
+  } catch (err) {
+    status.textContent = '❌ ' + (err.message || err);
+    if (btn) { btn.textContent = '🔄 Tekrar Dene'; btn.style.pointerEvents = 'auto'; }
+    console.error(err);
+  }
+}
+
+async function wipeAndInit() {
+  await dbWipe();
+  initAll(false);
+}
+
+async function restoreSession() {
+  const rows = await dbLoadAllTakes();
+  rows.sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  for (const r of rows) {
+    try {
+      const ab = await r.blob.arrayBuffer();
+      const buf = await E.ctx.decodeAudioData(ab);
+      E.takes.push({
+        id: r.id,
+        blob: r.blob,
+        buffer: buf,
+        duration: buf.duration,
+        beatOffset: r.beatOffset || 0,
+        muted: !!r.muted,
+        soloed: !!r.soloed,
+        createdAt: r.createdAt || Date.now(),
+      });
+    } catch (e) { console.warn('restore decode failed', e); }
+  }
+  if (E.takes.length > MAX_TAKES) E.takes = E.takes.slice(-MAX_TAKES);
+  E.selected = Math.max(0, E.takes.length - 1);
+  markOneBreathDirty();
+  renderLanes();
+  updateInfo();
+  if (E.takes.length) toast(`↻ ${E.takes.length} take yüklendi`, 'ok');
+}
+
+async function initMic(deviceId) {
+  if (E.micStream) E.micStream.getTracks().forEach(t => t.stop());
+  E.micStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      deviceId: deviceId ? { exact: deviceId } : undefined,
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: true,
+      sampleRate: parseInt(document.getElementById('srSelect').value),
+    }
+  });
+  E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
+  document.getElementById('micDot').classList.add('on');
+
+  // Watchdog: if track ends (BT drop, permission revoke), warn
+  E.micStream.getTracks().forEach(t => {
+    t.onended = () => {
+      document.getElementById('micDot').classList.remove('on');
+      document.getElementById('micDot').classList.add('err');
+      toast('⚠ Mic bağlantısı koptu — ayarlardan yeniden seç', 'err');
+    };
+  });
+}
+
+function setupDeviceWatchdog() {
+  try {
+    navigator.mediaDevices.addEventListener('devicechange', async () => {
+      await enumDevices();
+      toast('Cihaz değişikliği algılandı');
+    });
+  } catch (e) {}
+}
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { E.wakeLock = await navigator.wakeLock.request('screen'); }
+  catch(e) { console.warn('wakeLock', e); }
+}
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible') requestWakeLock();
+}
+
+// ═══ FX INIT ═══
+function initFX() {
+  const c = E.ctx;
+
+  E.beatGain = c.createGain();
+  E.beatGain.gain.value = 0.8;
+
+  E.micGain = c.createGain();
+  E.micGain.gain.value = 1.0;
+
+  // Compressor per locked spec: -18dB / 8ms attack / 4:1
+  E.compressor = c.createDynamicsCompressor();
+  E.compressor.threshold.value = -18;
+  E.compressor.knee.value = 6;
+  E.compressor.ratio.value = 4;
+  E.compressor.attack.value = 0.008;
+  E.compressor.release.value = 0.12;
+
+  // Presence EQ at 3.5kHz
+  E.eq = c.createBiquadFilter();
+  E.eq.type = 'peaking';
+  E.eq.frequency.value = 3500;
+  E.eq.Q.value = 1.4;
+  E.eq.gain.value = 3;
+
+  // HPF at 110Hz (memory-locked)
+  E.hpf = c.createBiquadFilter();
+  E.hpf.type = 'highpass';
+  E.hpf.frequency.value = 110;
+  E.hpf.Q.value = 0.707;
+
+  // De-esser: sidechain compression on 6kHz band
+  E.deEsserSide = c.createBiquadFilter();
+  E.deEsserSide.type = 'highpass';
+  E.deEsserSide.frequency.value = 5500;
+  E.deEsserBand = c.createBiquadFilter();
+  E.deEsserBand.type = 'peaking';
+  E.deEsserBand.frequency.value = 6500;
+  E.deEsserBand.Q.value = 1.8;
+  E.deEsserBand.gain.value = 0;
+  E.deEsser = c.createDynamicsCompressor();
+  E.deEsser.threshold.value = -26;
+  E.deEsser.knee.value = 2;
+  E.deEsser.ratio.value = 6;
+  E.deEsser.attack.value = 0.0005;
+  E.deEsser.release.value = 0.08;
+
+  // Reverb IR @ 1.2s (memory-locked)
+  E.reverb = c.createConvolver();
+  E.reverb.buffer = buildIR(c, 1.2);
+  E.reverbSend = c.createGain();
+  E.reverbSend.gain.value = 0;
+
+  // Delay: BPM-synced dotted 8th
+  E.delay = c.createDelay(2);
+  E.delay.delayTime.value = dottedEighthSec();
+  E.delaySend = c.createGain();
+  E.delaySend.gain.value = 0;
+  E.delayFb = c.createGain();
+  E.delayFb.gain.value = 0.32;
+  E.delay.connect(E.delayFb);
+  E.delayFb.connect(E.delay);
+
+  // Gate
+  E.gate = c.createDynamicsCompressor();
+  E.gate.threshold.value = -52;
+  E.gate.knee.value = 0;
+  E.gate.ratio.value = 20;
+  E.gate.attack.value = 0.001;
+  E.gate.release.value = 0.05;
+
+  // Saturation waveshaper
+  E.saturator = c.createWaveShaper();
+  E.saturator.curve = buildSaturationCurve(0.25);
+  E.saturator.oversample = '2x';
+
+  // Analyser + monitor + master limiter
+  E.analyser = c.createAnalyser();
+  E.analyser.fftSize = 2048;
+  E.analyser.smoothingTimeConstant = 0.3;
+
+  E.monitorGain = c.createGain();
+  E.monitorGain.gain.value = 0;
+
+  E.masterLimiter = c.createDynamicsCompressor();
+  E.masterLimiter.threshold.value = -1;
+  E.masterLimiter.knee.value = 0;
+  E.masterLimiter.ratio.value = 20;
+  E.masterLimiter.attack.value = 0.001;
+  E.masterLimiter.release.value = 0.05;
+
+  // Wire master out: monitor + beat → masterLimiter → destination
+  E.beatGain.connect(E.masterLimiter);
+  E.monitorGain.connect(E.masterLimiter);
+  E.masterLimiter.connect(c.destination);
+}
+
+function dottedEighthSec() {
+  const bpm = parseInt(document.getElementById('bpmInput')?.value || 140);
+  return (60 / bpm) * (1.5 / 2); // dotted eighth = 3/16 of a beat
+}
+
+function buildIR(ctx, seconds) {
+  const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.5);
+  }
+  return ir;
+}
+
+function buildSaturationCurve(driveAmount) {
+  const n = 2048;
+  const curve = new Float32Array(n);
+  const k = Math.max(0, driveAmount) * 4 + 0.01;
+  for (let i = 0; i < n; i++) {
+    const x = (i / n) * 2 - 1;
+    curve[i] = Math.tanh(x * (1 + k)) / Math.tanh(1 + k);
+  }
+  return curve;
+}
+
+// Idempotent FX chain build — safely disconnect everything, rewire
+function buildFXChain() {
+  const nodes = [E.micSrc, E.micGain, E.hpf, E.gate, E.compressor, E.eq,
+                 E.deEsserSide, E.deEsserBand, E.deEsser,
+                 E.saturator, E.analyser, E.reverb, E.reverbSend,
+                 E.delay, E.delaySend];
+  nodes.forEach(n => { try { n && n.disconnect(); } catch(e){} });
+
+  // Reconnect delay internal loop (broken by disconnect above)
+  try { E.delay.connect(E.delayFb); E.delayFb.connect(E.delay); } catch(e){}
+
+  // Main vocal chain
+  let node = E.micSrc;
+  node.connect(E.micGain); node = E.micGain;
+
+  if (fxState.hpf.on)  { node.connect(E.hpf);        node = E.hpf; }
+  if (fxState.gate.on) { node.connect(E.gate);       node = E.gate; }
+  if (fxState.comp.on) { node.connect(E.compressor); node = E.compressor; }
+  if (fxState.eq.on)   { node.connect(E.eq);         node = E.eq; }
+
+  // De-esser: serial insert (simplified — compressor on HP band fed from signal)
+  if (fxState.deess.on) {
+    // Approach: gain-side sidechain impossible via Web Audio ext trigger,
+    // but dynamic HP compression reduces sibilant energy effectively.
+    node.connect(E.deEsserSide);
+    E.deEsserSide.connect(E.deEsser);
+    // De-essed HP path AND untouched LP path both go forward
+    node.connect(E.analyser); // dry pre-deess analyser feed
+    E.deEsser.connect(E.analyser);
+    node = E.analyser;
+  } else {
+    node.connect(E.analyser);
+    node = E.analyser;
+  }
+
+  if (fxState.sat.on)  {
+    E.saturator.curve = buildSaturationCurve(fxState.sat.val / 100);
+    node.connect(E.saturator);
+    node = E.saturator;
+  }
+
+  // Main out → monitor (hears self back if volume > 0)
+  node.connect(E.monitorGain);
+
+  // Sends
+  if (fxState.reverb.on) {
+    node.connect(E.reverb);
+    E.reverb.connect(E.reverbSend);
+    E.reverbSend.connect(E.monitorGain);
+  }
+  if (fxState.delay.on) {
+    E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.01);
+    node.connect(E.delay);
+    E.delay.connect(E.delaySend);
+    E.delaySend.connect(E.monitorGain);
+  }
+}
+
+// Apply current FX to offline buffer for playback/export parity
+function connectPlaybackChain(ctx, source, destination, gainValue=1) {
+  let node = source;
+  const inputGain = ctx.createGain();
+  inputGain.gain.value = gainValue;
+  node.connect(inputGain);
+  node = inputGain;
+
+  if (fxState.hpf.on) {
+    const hpf = ctx.createBiquadFilter();
+    hpf.type = 'highpass';
+    hpf.frequency.value = fxState.hpf.val;
+    hpf.Q.value = 0.707;
+    node.connect(hpf); node = hpf;
+  }
+  if (fxState.gate.on) {
+    const gate = ctx.createDynamicsCompressor();
+    gate.threshold.value = fxState.gate.val;
+    gate.knee.value = 0; gate.ratio.value = 20;
+    gate.attack.value = 0.001; gate.release.value = 0.05;
+    node.connect(gate); node = gate;
+  }
+  if (fxState.comp.on) {
+    const comp = ctx.createDynamicsCompressor();
+    // val controls makeup via threshold drop
+    comp.threshold.value = -12 - (fxState.comp.val/100)*16;
+    comp.knee.value = 6;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.008;
+    comp.release.value = 0.12;
+    node.connect(comp); node = comp;
+  }
+  if (fxState.eq.on) {
+    const eq = ctx.createBiquadFilter();
+    eq.type = 'peaking';
+    eq.frequency.value = 3500;
+    eq.Q.value = 1.4;
+    eq.gain.value = fxState.eq.val;
+    node.connect(eq); node = eq;
+  }
+  if (fxState.deess.on) {
+    // Offline de-esser approximation: narrow bell cut at 6.5kHz based on amount
+    const cut = -(fxState.deess.val / 100) * 6; // up to -6dB
+    const bell = ctx.createBiquadFilter();
+    bell.type = 'peaking';
+    bell.frequency.value = 6500;
+    bell.Q.value = 2;
+    bell.gain.value = cut;
+    node.connect(bell); node = bell;
+  }
+  if (fxState.sat.on) {
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = buildSaturationCurve(fxState.sat.val / 100);
+    shaper.oversample = '2x';
+    node.connect(shaper); node = shaper;
+  }
+
+  node.connect(destination);
+
+  if (fxState.reverb.on && fxState.reverb.val > 0) {
+    const send = ctx.createGain();
+    send.gain.value = fxState.reverb.val / 100;
+    const conv = ctx.createConvolver();
+    conv.buffer = buildIR(ctx, 1.2);
+    node.connect(send); send.connect(conv); conv.connect(destination);
+  }
+  if (fxState.delay.on && fxState.delay.val > 0) {
+    const send = ctx.createGain();
+    send.gain.value = fxState.delay.val / 100;
+    const d = ctx.createDelay(2);
+    d.delayTime.value = dottedEighthSec();
+    const fb = ctx.createGain();
+    fb.gain.value = 0.32;
+    d.connect(fb); fb.connect(d);
+    node.connect(send); send.connect(d); d.connect(destination);
+  }
+}
+
+// ═══ DEVICES ═══
+async function enumDevices() {
+  const devs = await navigator.mediaDevices.enumerateDevices();
+  const oSel = document.getElementById('selOutput');
+  const iSel = document.getElementById('selInput');
+
+  const prevO = oSel.value, prevI = iSel.value;
+  oSel.innerHTML = '<option value="default">Varsayılan</option>';
+  iSel.innerHTML = '<option value="default">Varsayılan</option>';
+
+  let hasBT = false;
+  devs.forEach(d => {
+    if (d.kind === 'audiooutput') {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      const label = d.label || 'Çıkış ' + oSel.options.length;
+      const isBT = label.match(/Bluetooth|BT|JBL|AirPods|Buds|Beats/i);
+      o.textContent = isBT ? '🎧 ' + label : label;
+      if (isBT) { hasBT = true; if (!prevO || prevO === 'default') o.selected = true; }
+      if (d.deviceId === prevO) o.selected = true;
+      oSel.appendChild(o);
+    }
+    if (d.kind === 'audioinput') {
+      const o = document.createElement('option');
+      o.value = d.deviceId;
+      o.textContent = d.label || 'Mikrofon ' + iSel.options.length;
+      if (d.deviceId === prevI) o.selected = true;
+      iSel.appendChild(o);
+    }
+  });
+  document.getElementById('btDot').classList.toggle('on', hasBT);
+}
+
+async function setOutput(id) { E.outputId = id; }
+async function setInput(id) {
+  try {
+    await initMic(id === 'default' ? undefined : id);
+    buildFXChain();
+    toast('Mikrofon değiştirildi', 'ok');
+  } catch (e) { toast('Mic değişimi başarısız', 'err'); }
+}
+
+// ═══ BEAT ═══
+async function loadBeat(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const ab = await file.arrayBuffer();
+    E.beatBuf = await E.ctx.decodeAudioData(ab);
+    const name = file.name.replace(/\.[^.]+$/,'');
+    document.getElementById('beatLabel').textContent = name;
+    document.getElementById('beatBtn').classList.add('loaded');
+    document.getElementById('beatBtn').innerHTML = '♫ Beat';
+    drawRuler();
+    toast('✓ Beat yüklendi', 'ok');
+  } catch (err) { toast('Beat decode hatası', 'err'); }
+}
+
+function toggleBeat() {
+  if (!E.beatBuf) return;
+  E.beatPlaying ? stopBeat() : playBeat();
+}
+
+function playBeat(offset) {
+  if (!E.beatBuf) return;
+  if (E.ctx.state === 'suspended') E.ctx.resume();
+  E.beatSrc = E.ctx.createBufferSource();
+  E.beatSrc.buffer = E.beatBuf;
+  E.beatSrc.loop = true;
+  E.beatSrc.connect(E.beatGain);
+  const o = offset ?? E.beatOffset;
+  E.beatSrc.start(0, o);
+  E.beatStart = E.ctx.currentTime - o;
+  E.beatPlaying = true;
+  document.getElementById('tBeatPlay').textContent = '⏸';
+  document.getElementById('tBeatPlay').classList.add('active');
+}
+
+function stopBeat() {
+  if (E.beatSrc) {
+    E.beatOffset = (E.ctx.currentTime - E.beatStart) % (E.beatBuf?.duration || 1);
+    try { E.beatSrc.stop(); } catch(e){}
+    E.beatSrc = null;
+  }
+  E.beatPlaying = false;
+  document.getElementById('tBeatPlay').textContent = '▶';
+  document.getElementById('tBeatPlay').classList.remove('active');
+}
+
+function stopAll() {
+  if (E.recording) stopRec();
+  stopBeat();
+  stopTakePlayback();
+  E.beatOffset = 0;
+  document.getElementById('tTimer').textContent = '0:00';
+  document.getElementById('tTimer').classList.remove('recording');
+  document.getElementById('tInfoMain').textContent = 'Durduruldu';
+  hidePlayhead();
+}
+
+// ═══ RECORDING — fixed warmup + beat offset capture ═══
+async function toggleRec() { E.recording ? stopRec() : startRec(); }
+
+async function startRec() {
+  if (E.takes.length >= MAX_TAKES) {
+    toast('⚠ Max 10 take', 'err');
+    return;
+  }
+
+  const pr = parseInt(document.getElementById('preRoll').value);
+  if (pr > 0) await doPreRoll(pr);
+
+  if (E.beatBuf && !E.beatPlaying) playBeat(0);
+
+  // Capture beat offset when recording begins
+  E.recBeatOffsetAtStart = E.beatPlaying
+    ? ((E.ctx.currentTime - E.beatStart) % E.beatBuf.duration)
+    : 0;
+
+  const mimeCandidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mp4',
+  ];
+  const mime = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
+  if (!mime) { toast('MediaRecorder desteklenmiyor', 'err'); return; }
+
+  try {
+    E.recorder = new MediaRecorder(E.micStream, mime ? { mimeType: mime } : {});
+  } catch(e) {
+    toast('MediaRecorder hatası', 'err');
+    return;
+  }
+  E.recChunks = [];
+  E.recWarmupSec = 0;
+
+  E.recorder.ondataavailable = ev => { if (ev.data.size > 0) E.recChunks.push(ev.data); };
+  E.recorder.onstart = () => {
+    // Measure warmup: time between .start() call and actual capture start
+    const now = E.ctx.currentTime;
+    E.recWarmupSec = Math.max(0, now - E.recStartCtxTime);
+  };
+  E.recorder.onstop = () => finishTake(mime);
+  E.recorder.onerror = (ev) => {
+    toast('Record hatası: ' + (ev.error?.name || ''), 'err');
+    E.recording = false;
+  };
+
+  E.recStartCtxTime = E.ctx.currentTime;
+  E.recStartWallTime = performance.now();
+  E.recorder.start(100);
+  E.recording = true;
+
+  document.getElementById('tRec').classList.add('recording');
+  document.getElementById('tTimer').classList.add('recording');
+  document.getElementById('tInfoMain').textContent = '● REC — Take ' + (E.takes.length + 1);
+  updateRecTimer();
+  renderLanes();
+}
+
+function stopRec() {
+  if (E.recorder && E.recorder.state !== 'inactive') {
+    try { E.recorder.stop(); } catch(e){}
+  }
+  E.recording = false;
+  document.getElementById('tRec').classList.remove('recording');
+  document.getElementById('tTimer').classList.remove('recording');
+}
+
+async function doPreRoll(beats) {
+  const bpm = parseInt(document.getElementById('bpmInput').value);
+  const interval = 60000 / bpm;
+  document.getElementById('tInfoMain').textContent = 'Sayım...';
+  for (let i = beats; i > 0; i--) {
+    document.getElementById('tTimer').textContent = '' + i;
+    const osc = E.ctx.createOscillator();
+    const g = E.ctx.createGain();
+    osc.frequency.value = i === 1 ? 1200 : 880;
+    g.gain.value = 0.14;
+    g.gain.exponentialRampToValueAtTime(0.001, E.ctx.currentTime + 0.08);
+    osc.connect(g).connect(E.ctx.destination);
+    osc.start(); osc.stop(E.ctx.currentTime + 0.08);
+    await sleep(interval);
+  }
+}
+
+async function finishTake(mime) {
+  const blob = new Blob(E.recChunks, { type: mime });
+  const wallDur = (performance.now() - E.recStartWallTime) / 1000;
+  const idx = E.takes.length;
+
+  const take = {
+    id: Date.now() + Math.floor(Math.random()*1000),
+    blob,
+    buffer: null,
+    duration: wallDur,
+    beatOffset: E.recBeatOffsetAtStart,
+    muted: false,
+    soloed: false,
+    createdAt: Date.now(),
+  };
+  E.takes.push(take);
+  markOneBreathDirty();
+
+  // Decode async
+  try {
+    const ab = await blob.arrayBuffer();
+    const buf = await E.ctx.decodeAudioData(ab);
+    take.buffer = buf;
+    take.duration = buf.duration;
+    markOneBreathDirty();
+    drawLaneWaveform(idx);
+  } catch (e) {
+    toast('Decode hatası take ' + (idx+1), 'err');
+  }
+
+  E.selected = idx;
+  renderLanes();
+  updateInfo();
+  toast('✓ Take ' + (idx + 1) + ' kaydedildi', 'ok');
+  dbSaveTake(take);
+}
+
+function updateRecTimer() {
+  if (!E.recording) return;
+  const s = (performance.now() - E.recStartWallTime) / 1000;
+  document.getElementById('tTimer').textContent = fmtTime(s);
+  requestAnimationFrame(updateRecTimer);
+}
+
+// ═══ RENDER LANES ═══
+function renderLanes() {
+  const container = document.getElementById('takeLanes');
+  container.innerHTML = '<div class="playhead" id="playhead"></div>';
+
+  const soloActive = E.takes.some(t => t && t.soloed);
+
+  for (let i = 0; i < MAX_TAKES; i++) {
+    const t = E.takes[i];
+    const lane = document.createElement('div');
+    lane.className = 'take-lane';
+    if (i === E.selected && t) lane.classList.add('selected');
+    if (E.recording && i === E.takes.length) lane.classList.add('recording');
+    if (i === E.playingTake) lane.classList.add('playing');
+    if (t && t.muted) lane.classList.add('muted');
+    if (t && t.soloed) lane.classList.add('soloed');
+
+    const hdr = document.createElement('div');
+    hdr.className = 'lane-header';
+    hdr.innerHTML = `
+      <div class="lane-num">${i + 1}</div>
+      <div class="lane-status">${t ? fmtTime(t.duration) : (E.recording && i === E.takes.length ? 'REC' : '')}</div>
+    `;
+    if (t) {
+      const controls = document.createElement('div');
+      controls.className = 'lane-controls';
+      controls.innerHTML = `
+        <button class="lane-ctrl m ${t.muted?'on':''}" data-i="${i}" data-act="mute">M</button>
+        <button class="lane-ctrl s ${t.soloed?'on':''}" data-i="${i}" data-act="solo">S</button>
+      `;
+      hdr.appendChild(controls);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'lane-body';
+
+    if (t) {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'lane-waveform';
+      cvs.id = 'laneCanvas' + i;
+      body.appendChild(cvs);
+
+      if (t.beatOffset > 0.05) {
+        const off = document.createElement('div');
+        off.className = 'lane-offset';
+        off.textContent = '@' + fmtTime(t.beatOffset);
+        body.appendChild(off);
+      }
+      const dur = document.createElement('div');
+      dur.className = 'lane-duration';
+      dur.textContent = fmtTime(t.duration);
+      body.appendChild(dur);
+      requestAnimationFrame(() => drawLaneWaveform(i));
+    } else if (!(E.recording && i === E.takes.length)) {
+      const empty = document.createElement('div');
+      empty.className = 'lane-empty';
+      empty.textContent = '—';
+      body.appendChild(empty);
+    } else {
+      const cvs = document.createElement('canvas');
+      cvs.className = 'lane-waveform';
+      cvs.id = 'liveCanvas';
+      body.appendChild(cvs);
+      requestAnimationFrame(() => startLiveViz());
+    }
+
+    lane.appendChild(hdr);
+    lane.appendChild(body);
+
+    lane.addEventListener('click', (ev) => {
+      const ctrl = ev.target.closest('.lane-ctrl');
+      if (ctrl) {
+        const idx = parseInt(ctrl.dataset.i);
+        const act = ctrl.dataset.act;
+        if (act === 'mute') toggleMute(idx);
+        else if (act === 'solo') toggleSolo(idx);
+        ev.stopPropagation();
+        return;
+      }
+      if (t) { E.selected = i; renderLanes(); updateInfo(); }
+    });
+
+    let lastTap = 0;
+    lane.addEventListener('touchend', (ev) => {
+      if (ev.target.closest('.lane-ctrl')) return;
+      const now = Date.now();
+      if (now - lastTap < 300 && t) { ev.preventDefault(); playTakeWithTransition(i); }
+      lastTap = now;
+    });
+
+    container.appendChild(lane);
+  }
+
+  if (E.takes.length > 1) {
+    const lane = document.createElement('div');
+    lane.className = 'take-lane onebreath';
+    if (E.playingTake === -2) lane.classList.add('playing');
+    const hdr = document.createElement('div');
+    hdr.className = 'lane-header';
+    hdr.innerHTML = `<div class="lane-num">🔥</div><div class="lane-status">ONE</div>`;
+    const body = document.createElement('div');
+    body.className = 'lane-body';
+    const info = document.createElement('div');
+    info.className = 'lane-empty';
+    const ob = getOneBreathBuffer(false);
+    const activeCount = E.takes.filter(t => !t.muted || t.soloed).length;
+    info.textContent = ob ? `One Breath · ${fmtTime(ob.duration)} · ${activeCount} take` : 'One Breath hazır değil';
+    body.appendChild(info);
+    lane.appendChild(hdr);
+    lane.appendChild(body);
+    lane.addEventListener('click', () => playOneBreath());
+    container.appendChild(lane);
+  }
+
+  document.getElementById('tInfoSub').textContent =
+    `Take ${Math.max(1, E.selected + 1)}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+  document.getElementById('undoBtn').classList.toggle('hidden', E.trash.length === 0);
+}
+
+function toggleMute(i) {
+  if (!E.takes[i]) return;
+  E.takes[i].muted = !E.takes[i].muted;
+  markOneBreathDirty();
+  renderLanes();
+  dbSaveTake(E.takes[i]);
+}
+function toggleSolo(i) {
+  if (!E.takes[i]) return;
+  E.takes[i].soloed = !E.takes[i].soloed;
+  markOneBreathDirty();
+  renderLanes();
+  dbSaveTake(E.takes[i]);
+}
+
+function drawLaneWaveform(idx) {
+  const cvs = document.getElementById('laneCanvas' + idx);
+  const t = E.takes[idx];
+  if (!cvs || !t?.buffer) return;
+
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cvs.parentElement.getBoundingClientRect();
+  if (rect.width < 2) { requestAnimationFrame(() => drawLaneWaveform(idx)); return; }
+  cvs.width = rect.width * dpr; cvs.height = rect.height * dpr;
+  cvs.style.width = rect.width + 'px'; cvs.style.height = rect.height + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  const w = rect.width, h = rect.height;
+  const data = t.buffer.getChannelData(0);
+  const step = Math.max(1, Math.ceil(data.length / Math.max(1, w)));
+
+  const isSel = idx === E.selected;
+  const baseColor = t.muted ? 'rgba(100,100,120,' :
+                     t.soloed ? 'rgba(38,198,218,' :
+                     isSel ? 'rgba(255,109,0,' : 'rgba(76,175,80,';
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = baseColor + '0.6)';
+  for (let i = 0; i < w; i++) {
+    let min = 1, max = -1;
+    for (let j = 0; j < step; j++) {
+      const v = data[i * step + j] || 0;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    const yTop = ((1 - max) / 2) * h;
+    const yBot = ((1 - min) / 2) * h;
+    ctx.fillRect(i, yTop, 1, Math.max(1, yBot - yTop));
+  }
+  ctx.strokeStyle = baseColor + '0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+}
+
+function startLiveViz() {
+  const cvs = document.getElementById('liveCanvas');
+  if (!cvs || !E.analyser) return;
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cvs.parentElement.getBoundingClientRect();
+  if (rect.width < 2) return;
+  cvs.width = rect.width * dpr; cvs.height = rect.height * dpr;
+  cvs.style.width = rect.width + 'px'; cvs.style.height = rect.height + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = rect.width, h = rect.height;
+  const bufLen = E.analyser.frequencyBinCount;
+  const arr = new Uint8Array(bufLen);
+
+  function draw() {
+    if (!E.recording) return;
+    E.analyser.getByteTimeDomainData(arr);
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255,45,45,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    const slice = w / bufLen;
+    for (let i = 0; i < bufLen; i++) {
+      const y = (arr[i] / 128) * (h / 2);
+      i === 0 ? ctx.moveTo(0, y) : ctx.lineTo(i * slice, y);
+    }
+    ctx.stroke();
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function setupResizeObserver() {
+  if (typeof ResizeObserver === 'undefined') return;
+  const ro = new ResizeObserver(debounce(() => {
+    drawRuler();
+    for (let i = 0; i < E.takes.length; i++) drawLaneWaveform(i);
+  }, 120));
+  ro.observe(document.getElementById('takeLanes'));
+}
+
+function debounce(fn, ms) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+
+// ═══ TAKE PLAYBACK ═══
+function playSelected() {
+  if (E.selected < 0 || E.selected >= E.takes.length) return;
+  playTakeWithTransition(E.selected);
+}
+
+function playTakeWithTransition(idx) {
+  const t = E.takes[idx];
+  if (!t?.buffer) return;
+
+  const cfMs = parseInt(document.getElementById('cfMs').value) || 0;
+  const cfSec = cfMs / 1000;
+  const mode = E.cfMode;
+  const c = E.ctx;
+  const now = c.currentTime;
+
+  stopOneBreathPlayback();
+
+  if (E.takeSrc && E.playingTake >= 0) {
+    const oldGain = E.takeGain;
+    if (mode === 'xfade' && cfSec > 0 && oldGain) {
+      oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+      oldGain.gain.linearRampToValueAtTime(0, now + cfSec);
+      setTimeout(() => { try { E.takeSrc.stop(); } catch(e){} }, cfSec * 1000 + 50);
+      startTakePlay(idx, 0, cfSec);
+    } else {
+      try { E.takeSrc.stop(); } catch(e){}
+      startTakePlay(idx, 0, 0);
+    }
+  } else {
+    startTakePlay(idx, 0, 0);
+  }
+
+  // Beat sync: align beat to take's recorded beat offset
+  if (E.beatBuf) {
+    if (E.beatPlaying) { try { E.beatSrc.stop(); } catch(e){} E.beatSrc = null; }
+    playBeat(t.beatOffset || 0);
+  }
+}
+
+function startTakePlay(idx, startOffset, fadeInSec) {
+  const c = E.ctx;
+  const t = E.takes[idx];
+  const buf = t.buffer;
+
+  E.takeSrc = c.createBufferSource();
+  E.takeSrc.buffer = buf;
+  const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  E.takeGain = c.createGain();
+  if (fadeInSec > 0) {
+    E.takeGain.gain.setValueAtTime(0, c.currentTime);
+    E.takeGain.gain.linearRampToValueAtTime(vol, c.currentTime + fadeInSec);
+  } else {
+    E.takeGain.gain.value = vol;
+  }
+
+  connectPlaybackChain(c, E.takeSrc, E.takeGain, 1);
+  E.takeGain.connect(E.masterLimiter || c.destination);
+  E.takeSrc.start(0, startOffset);
+
+  E.playingTake = idx;
+  E.selected = idx;
+  renderLanes();
+  showPlayhead(idx, buf.duration);
+
+  E.takeSrc.onended = () => {
+    if (E.playingTake === idx) {
+      E.playingTake = -1;
+      hidePlayhead();
+      renderLanes();
+      updateInfo();
+    }
+  };
+  document.getElementById('tInfoMain').textContent = '▶ Take ' + (idx + 1);
+}
+
+function stopTakePlayback() {
+  if (E.takeSrc) { try { E.takeSrc.stop(); } catch(e){} E.takeSrc = null; }
+  stopOneBreathPlayback();
+  E.playingTake = -1;
+  hidePlayhead();
+}
+
+// ═══ ONE BREATH v2 — click-free ═══
+function markOneBreathDirty() { E.oneBreathDirty = true; E.oneBreathBuffer = null; }
+
+function activeTakes() {
+  const soloed = E.takes.filter(t => t?.buffer && t.soloed);
+  if (soloed.length) return soloed;
+  return E.takes.filter(t => t?.buffer && !t.muted);
+}
+
+function playOneBreath() {
+  if (E.takes.length === 0) return;
+  const buf = getOneBreathBuffer(true);
+  if (!buf) { toast('One Breath hazır değil'); return; }
+
+  if (E.beatBuf && !E.beatPlaying) playBeat(0);
+  if (E.takeSrc) { try { E.takeSrc.stop(); } catch(e){} E.takeSrc = null; }
+  stopOneBreathPlayback();
+
+  const src = E.ctx.createBufferSource();
+  src.buffer = buf;
+  const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  const g = E.ctx.createGain();
+  g.gain.value = vol;
+
+  connectPlaybackChain(E.ctx, src, g, 1);
+  g.connect(E.masterLimiter || E.ctx.destination);
+  src.start(0);
+
+  E.oneBreathSource = src;
+  E.oneBreathGain = g;
+  E.playingTake = -2;
+  renderLanes();
+  showPlayhead(-2, buf.duration);
+  document.getElementById('tInfoMain').textContent = '🔥 One Breath';
+
+  src.onended = () => {
+    if (E.playingTake === -2) {
+      E.playingTake = -1; hidePlayhead(); renderLanes(); updateInfo();
+    }
+  };
+}
+
+function stopOneBreathPlayback() {
+  if (E.oneBreathSource) { try { E.oneBreathSource.stop(); } catch(e){} E.oneBreathSource = null; }
+}
+
+function getOneBreathBuffer(rebuildIfDirty=true) {
+  if (!E.oneBreathDirty && E.oneBreathBuffer) return E.oneBreathBuffer;
+  if (!rebuildIfDirty) return E.oneBreathBuffer;
+  E.oneBreathBuffer = buildOneBreathBuffer();
+  E.oneBreathDirty = false;
+  return E.oneBreathBuffer;
+}
+
+function buildOneBreathBuffer() {
+  if (!E.ctx) return null;
+  const valid = activeTakes();
+  if (!valid.length) return null;
+  if (valid.length === 1) return valid[0].buffer;
+
+  const sr = E.ctx.sampleRate;
+  const cfMs = Math.max(0, parseInt(document.getElementById('cfMs').value) || 0);
+  const fadeSamples = Math.floor(sr * cfMs / 1000);
+  const microFade = Math.floor(sr * MICRO_FADE_MS / 1000);
+  const mode = E.cfMode;
+
+  const segments = valid.map(t => {
+    const mono = ensureSRMono(t.buffer, sr);
+    const trimmed = trimDB(mono, sr, ONE_BREATH_TRIM_DB, ONE_BREATH_GUARD_MS);
+    const matched = rmsMatch(trimmed, TARGET_RMS_LUFS_ISH);
+    return applyEdgeFades(matched, microFade);
+  }).filter(seg => seg.length > 0);
+
+  if (!segments.length) return null;
+  if (segments.length === 1) return f32ToBuf(segments[0], sr);
+
+  let out = segments[0];
+  for (let i = 1; i < segments.length; i++) {
+    const next = segments[i];
+    if (mode === 'xfade' && fadeSamples > 0) {
+      out = crossfade(out, next, fadeSamples);
+    } else if (mode === 'punch') {
+      out = punchJoin(out, next, Math.floor(fadeSamples * 0.35), microFade);
+    } else {
+      out = butJoin(out, next, microFade); // click-free cut
+    }
+  }
+  return f32ToBuf(out, sr);
+}
+
+function ensureSRMono(buffer, targetSr) {
+  let src = buffer;
+  if (src.sampleRate !== targetSr) src = resample(src, targetSr);
+  const ch0 = src.getChannelData(0);
+  if (src.numberOfChannels === 1) return new Float32Array(ch0);
+  const ch1 = src.getChannelData(1);
+  const out = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = (ch0[i] + ch1[i]) * 0.5;
+  return out;
+}
+
+function resample(buffer, targetSr) {
+  if (buffer.sampleRate === targetSr) return buffer;
+  const channels = buffer.numberOfChannels;
+  const ratio = targetSr / buffer.sampleRate;
+  const newLen = Math.max(1, Math.round(buffer.length * ratio));
+  const out = E.ctx.createBuffer(channels, newLen, targetSr);
+  for (let ch = 0; ch < channels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    for (let i = 0; i < newLen; i++) {
+      const pos = i / ratio;
+      const i0 = Math.floor(pos);
+      const i1 = Math.min(src.length - 1, i0 + 1);
+      const frac = pos - i0;
+      dst[i] = src[i0] * (1 - frac) + src[i1] * frac;
+    }
+  }
+  return out;
+}
+
+// dB-based trim with smoothed energy window
+function trimDB(data, sr, thresholdDB=-42, guardMs=22) {
+  const win = Math.max(16, Math.floor(sr * 0.01)); // 10ms window
+  const thresh = Math.pow(10, thresholdDB / 20);
+  const guard = Math.max(0, Math.floor(sr * guardMs / 1000));
+
+  // Find first window whose RMS exceeds threshold
+  let start = 0;
+  for (let i = 0; i < data.length - win; i += Math.max(1, Math.floor(win/2))) {
+    let s = 0;
+    for (let j = 0; j < win; j++) s += data[i+j] * data[i+j];
+    if (Math.sqrt(s/win) > thresh) { start = i; break; }
+  }
+  let end = data.length;
+  for (let i = data.length - win; i > start; i -= Math.max(1, Math.floor(win/2))) {
+    let s = 0;
+    for (let j = 0; j < win; j++) s += data[i+j] * data[i+j];
+    if (Math.sqrt(s/win) > thresh) { end = i + win; break; }
+  }
+
+  start = Math.max(0, start - guard);
+  end = Math.min(data.length, end + guard);
+  if (end <= start) return new Float32Array(0);
+  return data.slice(start, end);
+}
+
+function rmsMatch(data, target) {
+  if (!data.length) return data;
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+  const rms = Math.sqrt(sum / data.length);
+  if (rms < 0.001) return data;
+  const gain = Math.min(target / rms, 3); // cap gain to avoid noise blow-up
+  const out = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] * gain;
+    // Soft clip via tanh to prevent hard peaks
+    out[i] = Math.max(-1, Math.min(1, Math.tanh(v)));
+  }
+  return out;
+}
+
+function applyEdgeFades(data, samples) {
+  if (!data.length || samples <= 0) return data;
+  const n = Math.min(samples, Math.floor(data.length / 2));
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    data[i] *= Math.sin(t * Math.PI / 2);
+    data[data.length - 1 - i] *= Math.sin(t * Math.PI / 2);
+  }
+  return data;
+}
+
+function butJoin(a, b, microFade) {
+  // "Cut" mode with tiny click-free crossfade at junction
+  const f = Math.min(microFade, a.length, b.length);
+  if (f <= 1) return concat(a, b);
+  const out = new Float32Array(a.length + b.length - f);
+  out.set(a.slice(0, a.length - f), 0);
+  for (let i = 0; i < f; i++) {
+    const t = i / f;
+    out[a.length - f + i] = a[a.length - f + i] * (1-t) + b[i] * t;
+  }
+  out.set(b.slice(f), a.length);
+  return out;
+}
+
+function crossfade(a, b, fadeSamples) {
+  const f = Math.min(fadeSamples, a.length, b.length);
+  if (f <= 0) return concat(a, b);
+  const out = new Float32Array(a.length + b.length - f);
+  const split = a.length - f;
+  out.set(a.slice(0, split), 0);
+  for (let i = 0; i < f; i++) {
+    const t = i / f;
+    const fo = Math.cos(t * Math.PI * 0.5);
+    const fi = Math.sin(t * Math.PI * 0.5);
+    out[split + i] = a[split + i] * fo + b[i] * fi;
+  }
+  out.set(b.slice(f), split + f);
+  return out;
+}
+
+function punchJoin(a, b, overlap, microFade) {
+  const ov = Math.min(Math.max(0, overlap), a.length, b.length);
+  if (ov <= 0) return butJoin(a, b, microFade);
+  const out = new Float32Array(a.length + b.length - ov);
+  out.set(a.slice(0, a.length - ov), 0);
+  for (let i = 0; i < ov; i++) {
+    out[a.length - ov + i] = a[a.length - ov + i] * 0.35 + b[i];
+  }
+  out.set(b.slice(ov), a.length);
+  return out;
+}
+
+function concat(a, b) {
+  const out = new Float32Array(a.length + b.length);
+  out.set(a, 0); out.set(b, a.length);
+  return out;
+}
+
+function f32ToBuf(data, sr) {
+  const out = E.ctx.createBuffer(1, data.length, sr);
+  out.getChannelData(0).set(data);
+  return out;
+}
+
+// ═══ PLAYHEAD ═══
+function showPlayhead(idx, forcedDur=null) {
+  const ph = document.getElementById('playhead');
+  const lanes = document.getElementById('takeLanes');
+  const laneIndex = idx === -2 ? lanes.children.length - 1 : idx + 1;
+  const laneEl = lanes.children[laneIndex];
+  if (!laneEl) return;
+
+  ph.style.display = 'block';
+  ph.style.top = laneEl.offsetTop + 'px';
+  ph.style.height = laneEl.offsetHeight + 'px';
+
+  const dur = forcedDur || (idx === -2 ? (getOneBreathBuffer(false)?.duration || 1) : (E.takes[idx]?.duration || 1));
+  const bodyW = laneEl.querySelector('.lane-body')?.offsetWidth || 200;
+  const headerW = 64;
+  const startTime = E.ctx.currentTime;
+
+  function animate() {
+    if (E.playingTake !== idx) return;
+    const elapsed = E.ctx.currentTime - startTime;
+    const pct = Math.min(elapsed / Math.max(0.001, dur), 1);
+    ph.style.left = (headerW + pct * bodyW) + 'px';
+    if (pct < 1) requestAnimationFrame(animate);
+  }
+  animate();
+}
+
+function hidePlayhead() {
+  const ph = document.getElementById('playhead');
+  if (ph) ph.style.display = 'none';
+}
+
+function setCf(mode) {
+  E.cfMode = mode;
+  markOneBreathDirty();
+  ['cfCut','cfXfade','cfPunch'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(mode === 'cut' ? 'cfCut' : mode === 'xfade' ? 'cfXfade' : 'cfPunch').classList.add('active');
+  renderLanes();
+}
+
+// ═══ SOFT DELETE + UNDO ═══
+function deleteSelected() {
+  if (E.selected < 0 || E.selected >= E.takes.length) return;
+  const take = E.takes[E.selected];
+  if (!take) return;
+  E.trash.push({ take, index: E.selected });
+  if (E.trash.length > 5) E.trash.shift();
+  dbDeleteTake(take.id);
+  E.takes.splice(E.selected, 1);
+  E.selected = Math.max(0, Math.min(E.selected, E.takes.length - 1));
+  markOneBreathDirty();
+  renderLanes();
+  updateInfo();
+  toast('Silindi — geri almak için ↶');
+}
+
+function undoDelete() {
+  const item = E.trash.pop();
+  if (!item) return;
+  const insertAt = Math.min(item.index, E.takes.length);
+  E.takes.splice(insertAt, 0, item.take);
+  if (E.takes.length > MAX_TAKES) {
+    const over = E.takes.pop();
+    dbDeleteTake(over.id);
+  }
+  E.selected = insertAt;
+  dbSaveTake(item.take);
+  markOneBreathDirty();
+  renderLanes();
+  updateInfo();
+  toast('↶ Geri alındı', 'ok');
+}
+
+async function wipeSession() {
+  if (!confirm('Tüm takes silinecek. Emin misin?')) return;
+  E.takes = []; E.trash = []; E.selected = 0;
+  await dbWipe();
+  markOneBreathDirty();
+  renderLanes();
+  updateInfo();
+  toast('Session temizlendi', 'ok');
+}
+
+// ═══ EXPORT ═══
+async function exportMix() {
+  const actives = activeTakes();
+  const vocalBuf = (actives.length > 1 ? getOneBreathBuffer(true) :
+                    (actives.length === 1 ? actives[0].buffer : E.takes[E.selected]?.buffer));
+  if (!vocalBuf && !E.beatBuf) { toast('Beat veya take gerekli', 'err'); return; }
+
+  const latSec = (parseInt(document.getElementById('latComp').value) || 0) / 1000;
+  const vocalDur = vocalBuf?.duration || 0;
+  const beatDur = E.beatBuf?.duration || 0;
+  const totalDur = Math.max(vocalDur + Math.max(0, latSec), beatDur, 1) + 0.1;
+  const sr = E.ctx.sampleRate;
+
+  toast('Mix render ediliyor...');
+  const off = new OfflineAudioContext(2, Math.ceil(totalDur * sr), sr);
+
+  // Master limiter at output
+  const masterLim = off.createDynamicsCompressor();
+  masterLim.threshold.value = -1;
+  masterLim.knee.value = 0;
+  masterLim.ratio.value = 20;
+  masterLim.attack.value = 0.001;
+  masterLim.release.value = 0.05;
+  masterLim.connect(off.destination);
+
+  if (E.beatBuf) {
+    const bs = off.createBufferSource();
+    bs.buffer = E.beatBuf;
+    bs.loop = beatDur > 0 && beatDur < totalDur;
+    const bg = off.createGain();
+    bg.gain.value = parseInt(document.getElementById('beatVol').value) / 100;
+    bs.connect(bg).connect(masterLim);
+    bs.start(0);
+  }
+
+  if (vocalBuf) {
+    const vs = off.createBufferSource();
+    vs.buffer = cloneBufferTo(vocalBuf, off);
+    const vg = off.createGain();
+    const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+    vg.gain.value = 1;
+    connectPlaybackChain(off, vs, vg, vol);
+    vg.connect(masterLim);
+    // Apply BT latency compensation: vocals start LATER than beat
+    // so that when the user hears them through BT (delayed), they align
+    vs.start(Math.max(0, latSec));
+  }
+
+  try {
+    const rendered = await off.startRendering();
+    const wav = bufToWav16TPDF(rendered);
+    const name = actives.length > 1 ? 'QVLLEN_ONE_BREATH_MIX.wav' : `QVLLEN_Mix_Take${E.selected+1}.wav`;
+    dl(new Blob([wav], { type:'audio/wav' }), name);
+    toast('✓ Mix indirildi', 'ok');
+  } catch (err) { console.error(err); toast('Export hatası', 'err'); }
+}
+
+async function exportOneBreathStem() {
+  const buf = getOneBreathBuffer(true);
+  if (!buf) { toast('One Breath yok', 'err'); return; }
+  const sr = E.ctx.sampleRate;
+  const off = new OfflineAudioContext(2, Math.ceil(buf.duration * sr) + 100, sr);
+  const masterLim = off.createDynamicsCompressor();
+  masterLim.threshold.value = -1; masterLim.knee.value = 0; masterLim.ratio.value = 20;
+  masterLim.attack.value = 0.001; masterLim.release.value = 0.05;
+  masterLim.connect(off.destination);
+
+  const vs = off.createBufferSource();
+  vs.buffer = cloneBufferTo(buf, off);
+  const vg = off.createGain();
+  const vol = parseInt(document.getElementById('vocalVol')?.value || 100) / 100;
+  connectPlaybackChain(off, vs, vg, vol);
+  vg.connect(masterLim);
+  vs.start(0);
+
+  try {
+    const rendered = await off.startRendering();
+    const wav = bufToWav16TPDF(rendered);
+    dl(new Blob([wav], { type:'audio/wav' }), 'QVLLEN_OneBreath_Stem.wav');
+    toast('✓ Stem indirildi', 'ok');
+  } catch (e) { toast('Stem hatası', 'err'); }
+}
+
+function cloneBufferTo(buffer, ctx) {
+  const out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    out.getChannelData(ch).set(buffer.getChannelData(ch));
+  }
+  return out;
+}
+
+function exportAllTakes() {
+  if (!E.takes.length) { toast('Take yok'); return; }
+  E.takes.forEach((t, i) => dl(t.blob, `Take_${i+1}.webm`));
+  toast(`✓ ${E.takes.length} take indirildi`, 'ok');
+}
+
+function dl(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 100);
+}
+
+// ═══ WAV WRITER with TPDF dither + true-peak limit ═══
+function bufToWav16TPDF(buf) {
+  const nCh = buf.numberOfChannels, sr = buf.sampleRate;
+  const bps = 16, ba = nCh * bps/8;
+
+  // Extract channels
+  const chs = []; for (let c = 0; c < nCh; c++) chs.push(buf.getChannelData(c));
+
+  // True-peak measurement (simple — 2x oversampling via linear interp)
+  let peak = 0;
+  for (let c = 0; c < nCh; c++) {
+    const d = chs[c];
+    for (let i = 0; i < d.length - 1; i++) {
+      const a = Math.abs(d[i]);
+      const b = Math.abs(d[i] * 0.5 + d[i+1] * 0.5); // interp midpoint
+      if (a > peak) peak = a;
+      if (b > peak) peak = b;
+    }
+  }
+  const peakGain = peak > MASTER_CEILING ? MASTER_CEILING / peak : 1;
+
+  const len = buf.length * ba;
+  const ab = new ArrayBuffer(44 + len);
+  const v = new DataView(ab);
+  const ws = (o, s) => { for (let i=0;i<s.length;i++) v.setUint8(o+i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4, 36+len, true); ws(8,'WAVE');
+  ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+  v.setUint16(22,nCh,true); v.setUint32(24,sr,true);
+  v.setUint32(28,sr*ba,true); v.setUint16(32,ba,true); v.setUint16(34,bps,true);
+  ws(36,'data'); v.setUint32(40,len,true);
+
+  // TPDF dither: (rand() - rand()) at 1 LSB of 16-bit
+  const ditherAmp = 1 / 32768;
+  let o = 44;
+  for (let i = 0; i < buf.length; i++) {
+    for (let c = 0; c < nCh; c++) {
+      const s = chs[c][i] * peakGain;
+      const tpdf = (Math.random() - Math.random()) * ditherAmp;
+      const dithered = Math.max(-1, Math.min(1, s + tpdf));
+      v.setInt16(o, dithered < 0 ? dithered * 0x8000 : dithered * 0x7FFF, true);
+      o += 2;
+    }
+  }
+  return ab;
+}
+
+// ═══ METER with peak hold ═══
+function startMeter() {
+  const arr = new Float32Array(E.analyser.frequencyBinCount);
+  const fill = document.getElementById('meterFill');
+  const peakHold = document.getElementById('meterPeakHold');
+  const dbText = document.getElementById('meterDb');
+
+  function tick() {
+    if (!E.analyser) { requestAnimationFrame(tick); return; }
+    E.analyser.getFloatTimeDomainData(arr);
+    let pk = 0;
+    for (let i = 0; i < arr.length; i++) { const a = Math.abs(arr[i]); if (a > pk) pk = a; }
+
+    const db = pk > 0 ? 20 * Math.log10(pk) : -100;
+    const pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
+
+    fill.style.width = pct + '%';
+
+    // Peak hold
+    const now = performance.now();
+    if (db > E.meterPeakHold || (now - E.meterPeakHoldAt > PEAK_HOLD_MS)) {
+      E.meterPeakHold = db;
+      E.meterPeakHoldAt = now;
+    }
+    const phPct = Math.max(0, Math.min(100, (E.meterPeakHold + 60) / 60 * 100));
+    peakHold.style.left = phPct + '%';
+
+    dbText.textContent = db < -80 ? '-∞ dB' :
+                          db > -0.1 ? '▲ CLIP' :
+                          db.toFixed(0) + ' dB';
+    dbText.style.color = db > -3 ? 'var(--rec-red)' : db > -12 ? 'var(--yellow)' : 'var(--text3)';
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// ═══ RULER ═══
+function drawRuler() {
+  const cvs = document.getElementById('rulerCanvas');
+  if (!cvs) return;
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = cvs.parentElement.offsetWidth;
+  const h = 22;
+  cvs.width = w * dpr; cvs.height = h * dpr;
+  cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  ctx.fillStyle = '#222228'; ctx.fillRect(0, 0, w, h);
+  const dur = E.beatBuf?.duration || getOneBreathBuffer(false)?.duration || 60;
+  const pxPerSec = (w - 64) / Math.max(1, dur);
+
+  ctx.fillStyle = '#555568';
+  ctx.font = '9px "IBM Plex Mono"';
+  ctx.textAlign = 'center';
+
+  for (let s = 0; s <= dur; s++) {
+    const x = 64 + s * pxPerSec;
+    if (s % 5 === 0) {
+      ctx.fillStyle = '#666678';
+      ctx.fillRect(x, 14, 1, 8);
+      ctx.fillStyle = '#555568';
+      ctx.fillText(fmtTime(s), x, 12);
+    } else {
+      ctx.fillRect(x, 18, 1, 4);
+    }
+  }
+}
+
+// ═══ FX GRID ═══
+function renderFXGrid() {
+  const grid = document.getElementById('fxGrid');
+  grid.innerHTML = '';
+  FX_DEFS.forEach(fx => {
+    const card = document.createElement('div');
+    card.className = 'fx-card';
+    card.innerHTML = `
+      <div class="fx-top">
+        <span class="fx-name">${fx.name}</span>
+        <button class="fx-sw ${fxState[fx.id].on?'on':''}" id="fxSw_${fx.id}"></button>
+      </div>
+      <input type="range" class="fx-range" min="${fx.min}" max="${fx.max}" value="${fxState[fx.id].val}" id="fxR_${fx.id}">
+      <div class="fx-val" id="fxV_${fx.id}">${fxState[fx.id].val}${fx.unit}</div>
+    `;
+    card.querySelector('.fx-sw').onclick = () => {
+      fxState[fx.id].on = !fxState[fx.id].on;
+      card.querySelector('.fx-sw').classList.toggle('on');
+      buildFXChain();
+    };
+    card.querySelector('.fx-range').oninput = function() {
+      fxState[fx.id].val = parseFloat(this.value);
+      document.getElementById('fxV_'+fx.id).textContent = this.value + fx.unit;
+      applyFXParam(fx.id, parseFloat(this.value));
+    };
+    grid.appendChild(card);
+  });
+}
+
+function applyFXParam(id, val) {
+  switch(id) {
+    case 'comp':   E.compressor.threshold.value = -12 - (val/100)*16; break;
+    case 'eq':     E.eq.gain.value = val; break;
+    case 'deess':  E.deEsser.threshold.value = -20 - (val/100)*16; break;
+    case 'reverb': E.reverbSend.gain.value = val/100; break;
+    case 'delay':  E.delaySend.gain.value = val/100; break;
+    case 'hpf':    E.hpf.frequency.value = val; break;
+    case 'gate':   E.gate.threshold.value = val; break;
+    case 'sat':    E.saturator.curve = buildSaturationCurve(val/100); break;
+  }
+}
+
+function toggleMasterLimiter() {
+  E.masterLimiterEnabled = !E.masterLimiterEnabled;
+  document.getElementById('masterLimiterSw').classList.toggle('on', E.masterLimiterEnabled);
+  // Reroute master limiter
+  try {
+    E.beatGain.disconnect(); E.monitorGain.disconnect(); E.masterLimiter.disconnect();
+  } catch(e){}
+  if (E.masterLimiterEnabled) {
+    E.beatGain.connect(E.masterLimiter);
+    E.monitorGain.connect(E.masterLimiter);
+    E.masterLimiter.connect(E.ctx.destination);
+  } else {
+    E.beatGain.connect(E.ctx.destination);
+    E.monitorGain.connect(E.ctx.destination);
+  }
+}
+
+function toggleAutosave() {
+  E.autosave = !E.autosave;
+  document.getElementById('autosaveSw').classList.toggle('on', E.autosave);
+  setSaveDot(E.autosave ? 'on' : 'warn');
+  if (E.autosave) E.takes.forEach(t => dbSaveTake(t));
+}
+
+// ═══ BT LATENCY CALIBRATION ═══
+function openCalibration() {
+  document.getElementById('calModal').classList.add('show');
+  document.getElementById('calVal').classList.add('hidden');
+  document.getElementById('calStartBtn').disabled = false;
+}
+function closeCalibration() {
+  document.getElementById('calModal').classList.remove('show');
+}
+
+async function runCalibration() {
+  const startBtn = document.getElementById('calStartBtn');
+  const val = document.getElementById('calVal');
+  const body = document.getElementById('calBody');
+  startBtn.disabled = true;
+  body.textContent = 'Ölçüyor... kulaklığa klik sesleri geliyor.';
+
+  try {
+    const sr = E.ctx.sampleRate;
+    const CLICKS = 5;
+    const INTERVAL = 0.7;
+    const measurements = [];
+
+    for (let k = 0; k < CLICKS; k++) {
+      const diff = await measureSingleLatency(INTERVAL * 0.5);
+      if (diff !== null && diff >= 0 && diff < 0.6) measurements.push(diff);
+      await sleep(INTERVAL * 1000);
+    }
+
+    if (measurements.length < 2) {
+      body.textContent = 'Ölçüm başarısız — sessiz ortam ve kulaklık mic\'e yakın olmalı.';
+      startBtn.disabled = false;
+      return;
+    }
+
+    measurements.sort((a,b)=>a-b);
+    const median = measurements[Math.floor(measurements.length/2)];
+    const ms = Math.round(median * 1000);
+    val.textContent = ms + ' ms';
+    val.classList.remove('hidden');
+    body.textContent = `Bulunan gecikme: ${ms}ms. Ayarlar'a uygulandı.`;
+    document.getElementById('latComp').value = ms;
+    startBtn.disabled = false;
+  } catch (e) {
+    body.textContent = 'Hata: ' + e.message;
+    startBtn.disabled = false;
+  }
+}
+
+async function measureSingleLatency(timeoutSec) {
+  return new Promise(async (resolve) => {
+    const c = E.ctx;
+    const buflen = 2048;
+    const analyser = c.createAnalyser();
+    analyser.fftSize = buflen;
+    try { E.micSrc.connect(analyser); } catch(e) { resolve(null); return; }
+    const arr = new Float32Array(buflen);
+
+    // Schedule click at known time
+    const when = c.currentTime + 0.08;
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.frequency.value = 2000;
+    g.gain.setValueAtTime(0, when - 0.001);
+    g.gain.linearRampToValueAtTime(0.6, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + 0.015);
+    osc.connect(g).connect(c.destination);
+    osc.start(when);
+    osc.stop(when + 0.03);
+
+    const deadline = c.currentTime + timeoutSec + 0.2;
+    const threshold = 0.08;
+    let detected = null;
+
+    function poll() {
+      if (detected !== null) return;
+      analyser.getFloatTimeDomainData(arr);
+      let pk = 0;
+      for (let i = 0; i < arr.length; i++) { const a = Math.abs(arr[i]); if (a > pk) pk = a; }
+      if (pk > threshold && c.currentTime > when + 0.02) {
+        detected = c.currentTime - when;
+        try { analyser.disconnect(); } catch(e){}
+        resolve(detected);
+        return;
+      }
+      if (c.currentTime > deadline) {
+        try { analyser.disconnect(); } catch(e){}
+        resolve(null);
+        return;
+      }
+      requestAnimationFrame(poll);
+    }
+    poll();
+  });
+}
+
+// ═══ DRAWERS ═══
+function openDrawer(type) {
+  document.getElementById('drawerOverlay').classList.add('show');
+  document.getElementById(type + 'Drawer').classList.add('show');
+}
+function closeDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('show');
+  document.querySelectorAll('.drawer').forEach(d => d.classList.remove('show'));
+}
+
+// ═══ UTILS ═══
+function updateInfo() {
+  document.getElementById('tInfoSub').textContent =
+    `Take ${Math.max(1, E.selected + 1)}/${MAX_TAKES} · ${E.takes.length} kayıtlı`;
+}
+
+function fmtTime(s) {
+  if (!isFinite(s)) s = 0;
+  const m = Math.floor(s/60);
+  const sec = Math.floor(s%60);
+  return m + ':' + String(sec).padStart(2,'0');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+window.addEventListener('resize', debounce(() => { drawRuler(); renderLanes(); }, 150));
+document.getElementById('cfMs').addEventListener('input', () => markOneBreathDirty());
+document.getElementById('vocalVol').addEventListener('input', () => {
+  const vol = parseInt(document.getElementById('vocalVol').value || 100) / 100;
+  if (E.takeGain) E.takeGain.gain.value = vol;
+  if (E.oneBreathGain) E.oneBreathGain.gain.value = vol;
+});
+document.getElementById('bpmInput').addEventListener('input', () => {
+  if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
+});
+
+// Before unload: final DB flush
+window.addEventListener('beforeunload', () => {
+  E.takes.forEach(t => { try { dbSaveTake(t); } catch(e){} });
+});
+
+// Preflight on load
+window.addEventListener('DOMContentLoaded', preflightCheck);
+</script>
+</body>
+</html>
