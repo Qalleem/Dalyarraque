@@ -649,12 +649,27 @@ html, body {
       <input type="range" class="fx-range" style="width:140px" min="0" max="150" value="100" id="vocalVol">
     </div>
     <div class="s-row">
-      <span class="s-label">Monitor Volume <div class="s-desc">BT kulaklık geri besleme</div></span>
-      <input type="range" class="fx-range" style="width:140px" min="0" max="100" value="0" id="monitorVol" oninput="E.monitorGain&&(E.monitorGain.gain.value=this.value/100)">
+      <span class="s-label">Monitor Volume <div class="s-desc">Kulaklıkla kullan — hoparlörde feedback</div></span>
+      <input type="range" class="fx-range" style="width:140px" min="0" max="100" value="0" id="monitorVol" oninput="E.monitorGain&&(E.monitorGain.gain.value=this.value/100);warnMonitor(this.value)">
     </div>
     <div class="s-row">
       <span class="s-label">Master Limiter</span>
       <button class="fx-sw on" id="masterLimiterSw" onclick="toggleMasterLimiter()"></button>
+    </div>
+    <div class="s-row">
+      <div><div class="s-label">Reverb Mode</div><div class="s-desc">IR tipi — live + export paylaşır</div></div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <select class="s-select" id="reverbMode" onchange="setReverbMode(this.value)" style="width:108px">
+          <option value="small">Small 0.3s</option>
+          <option value="medium" selected>Medium 1.2s</option>
+          <option value="hall">Hall 2.8s</option>
+          <option value="user">User IR</option>
+        </select>
+        <span id="irUploadRow" style="display:none">
+          <input type="file" id="irUploadFile" accept="audio/*" style="display:none" onchange="loadUserIR(event)">
+          <button class="s-btn" onclick="document.getElementById('irUploadFile').click()" style="height:28px;padding:0 10px;font-size:11px;">📂</button>
+        </span>
+      </div>
     </div>
   </div>
 </div>
@@ -664,7 +679,7 @@ html, body {
   <div class="drawer-title">AYARLAR</div>
 
   <div class="s-row">
-    <div><div class="s-label">Beat Çıkışı</div><div class="s-desc">Kulaklık / BT seç</div></div>
+    <div><div class="s-label">Beat Çıkışı</div><div class="s-desc">Çıkış cihazı seç</div></div>
     <select class="s-select" id="selOutput" onchange="setOutput(this.value)"></select>
   </div>
   <div class="s-row">
@@ -672,7 +687,7 @@ html, body {
     <select class="s-select" id="selInput" onchange="setInput(this.value)"></select>
   </div>
   <div class="s-row">
-    <div><div class="s-label">BT Latency (ms)</div><div class="s-desc">Kulaklık gecikme telafisi — export'ta uygulanır</div></div>
+    <div><div class="s-label">Latency Comp (ms)</div><div class="s-desc">Kulaklık gecikme telafisi — export'ta uygulanır</div></div>
     <div style="display:flex; gap:6px; align-items:center;">
       <input class="s-input" type="number" value="150" id="latComp">
       <button class="s-btn primary" onclick="openCalibration()">Ölç</button>
@@ -713,8 +728,13 @@ html, body {
   <div style="margin-top:14px; padding:10px; background:var(--bg-deep); border-radius:8px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.5;">
     <b style="color:var(--text3)">ENGINE SPEC</b><br>
     HPF 110Hz · Comp −18dB/8ms/4:1 · EQ 3.5kHz · De-Ess 6kHz<br>
-    Reverb IR 1.2s · Delay dotted-1/8 @BPM<br>
+    Reverb IR (small/medium/hall/user) · Delay dotted-1/8 @BPM<br>
     Export: TPDF dither · True-peak limit −1dBFS · 16-bit WAV
+  </div>
+
+  <div style="margin-top:10px;">
+    <button onclick="toggleMicDebug()" style="width:100%;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:'IBM Plex Mono';font-size:9px;letter-spacing:1px;cursor:pointer;">MIC / GATE DEBUG ▾</button>
+    <pre id="micDebugPre" style="display:none;margin-top:6px;padding:10px;background:var(--bg-deep);border-radius:6px;font-family:'IBM Plex Mono';font-size:9px;color:var(--cyan);line-height:1.6;white-space:pre-wrap;word-break:break-all;"></pre>
   </div>
 </div>
 
@@ -847,10 +867,94 @@ const E = {
 
   autosave: true,
   autoTransition: true,
+  reverbIrMode: 'medium',
+  userIRBuffer: null,
   db: null,
   deviceWatchdogTimer: null,
   wakeLock: null,
 };
+
+// ═══ GATE AUDIOWORKLET PROCESSOR ═══
+const GATE_WORKLET_SRC = `
+class NoiseGateProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    const o = options.processorOptions || {};
+    this._thr  = o.threshold ?? -52;
+    this._att  = o.attack    ?? 0.001;
+    this._hold = o.hold      ?? 0.080;
+    this._rel  = o.release   ?? 0.150;
+    this._gain = 0; this._holdLeft = 0;
+    this.port.onmessage = ({ data: d }) => {
+      if (d.threshold !== undefined) this._thr  = d.threshold;
+      if (d.attack    !== undefined) this._att  = d.attack;
+      if (d.hold      !== undefined) this._hold = d.hold;
+      if (d.release   !== undefined) this._rel  = d.release;
+    };
+  }
+  process(inputs, outputs) {
+    const inp = inputs[0];
+    if (!inp || !inp[0]) return true;
+    const sr = sampleRate;
+    const thLin = Math.pow(10, this._thr / 20);
+    const aCoef = Math.exp(-1 / (sr * this._att));
+    const rCoef = Math.exp(-1 / (sr * this._rel));
+    const holdN = (sr * this._hold) | 0;
+    for (let ch = 0; ch < outputs[0].length; ch++) {
+      const i = inp[Math.min(ch, inp.length - 1)];
+      const o = outputs[0][ch];
+      for (let n = 0; n < i.length; n++) {
+        if (Math.abs(i[n]) > thLin) {
+          this._holdLeft = holdN;
+          this._gain = 1 - (1 - this._gain) * aCoef;
+        } else if (this._holdLeft > 0) {
+          this._holdLeft--;
+          this._gain = 1 - (1 - this._gain) * aCoef;
+        } else {
+          this._gain = this._gain * rCoef;
+        }
+        o[n] = i[n] * this._gain;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('noise-gate', NoiseGateProcessor);
+`;
+
+let _gateWorkletUrl  = null;
+let _gateWorkletReady = false;
+
+async function loadGateWorklet(ctx) {
+  if (!ctx?.audioWorklet) return false;
+  try {
+    if (!_gateWorkletUrl) {
+      _gateWorkletUrl = URL.createObjectURL(
+        new Blob([GATE_WORKLET_SRC], { type: 'application/javascript' })
+      );
+    }
+    await ctx.audioWorklet.addModule(_gateWorkletUrl);
+    return true;
+  } catch (e) {
+    console.warn('[gate] worklet load failed, compressor fallback:', e.message);
+    return false;
+  }
+}
+
+async function initGate() {
+  const ok = await loadGateWorklet(E.ctx);
+  if (!ok) return;
+  _gateWorkletReady = true;
+  try { E.gate.disconnect(); } catch(_) {}
+  E.gate = new AudioWorkletNode(E.ctx, 'noise-gate', {
+    numberOfInputs: 1, numberOfOutputs: 1,
+    outputChannelCount: [2],
+    processorOptions: { threshold: fxState.gate.val, attack: 0.001, hold: 0.080, release: 0.150 },
+  });
+  if (fxState.gate.on) buildFXChain();
+  refreshMicDebug();
+  console.log('[gate] AudioWorklet true gate active');
+}
 
 // Locked FX defs per engineering memory
 const FX_DEFS = [
@@ -985,6 +1089,7 @@ async function initAll(restoreTakes=false) {
     status.textContent = 'FX engine kuruluyor...';
     initFX();
     buildFXChain();
+    initGate().catch(e => console.warn('[gate]', e));
 
     status.textContent = 'Cihazlar taranıyor...';
     await enumDevices();
@@ -1057,14 +1162,15 @@ async function initMic(deviceId) {
       deviceId: deviceId ? { exact: deviceId } : undefined,
       echoCancellation: false,
       noiseSuppression: false,
-      autoGainControl: true,
+      autoGainControl: false,
       sampleRate: parseInt(document.getElementById('srSelect').value),
     }
   });
   E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
   document.getElementById('micDot').classList.add('on');
+  refreshMicDebug();
 
-  // Watchdog: if track ends (BT drop, permission revoke), warn
+  // Watchdog: if track ends (permission revoke), warn
   E.micStream.getTracks().forEach(t => {
     t.onended = () => {
       document.getElementById('micDot').classList.remove('on');
@@ -1139,9 +1245,9 @@ function initFX() {
   E.deEsser.attack.value = 0.0005;
   E.deEsser.release.value = 0.08;
 
-  // Reverb IR @ 1.2s (memory-locked)
+  // Reverb convolver — mode-aware IR
   E.reverb = c.createConvolver();
-  E.reverb.buffer = buildIR(c, 1.2);
+  E.reverb.buffer = buildIR(c, E.reverbIrMode);
   E.reverbSend = c.createGain();
   E.reverbSend.gain.value = 0;
 
@@ -1194,14 +1300,54 @@ function dottedEighthSec() {
   return (60 / bpm) * (1.5 / 2); // dotted eighth = 3/16 of a beat
 }
 
-function buildIR(ctx, seconds) {
-  const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
-  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+function buildIR(ctx, mode = 'medium', userBuf = null) {
+  if (mode === 'user' && userBuf) return userBuf;
+  const P = {
+    small:  { dur: 0.30, pre: 0.003, exp: 3.8 },
+    medium: { dur: 1.20, pre: 0.012, exp: 2.5 },
+    hall:   { dur: 2.80, pre: 0.020, exp: 1.6 },
+  };
+  const p = P[mode] || P.medium;
+  const sr = ctx.sampleRate;
+  const preSmp = Math.floor(sr * p.pre);
+  const len = Math.floor(sr * p.dur) + preSmp;
+  const ir = ctx.createBuffer(2, len, sr);
   for (let ch = 0; ch < 2; ch++) {
     const d = ir.getChannelData(ch);
-    for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.5);
+    for (let i = 0; i < len; i++) {
+      if (i < preSmp) { d[i] = 0; continue; }
+      const t = (i - preSmp) / (len - preSmp);
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, p.exp) * (ch === 0 ? 1.0 : 0.92);
+    }
   }
   return ir;
+}
+
+function getReverbIR(ctx) {
+  return buildIR(ctx, E.reverbIrMode, E.userIRBuffer);
+}
+
+function setReverbMode(mode) {
+  E.reverbIrMode = mode;
+  const irRow = document.getElementById('irUploadRow');
+  if (irRow) irRow.style.display = mode === 'user' ? '' : 'none';
+  E.reverb.buffer = getReverbIR(E.ctx);
+  markOneBreathDirty();
+  toast('Reverb: ' + mode);
+}
+
+async function loadUserIR(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const buf = await E.ctx.decodeAudioData(await file.arrayBuffer());
+    E.userIRBuffer = buf;
+    E.reverbIrMode = 'user';
+    E.reverb.buffer = buf;
+    markOneBreathDirty();
+    document.getElementById('reverbMode').value = 'user';
+    toast('✓ IR yüklendi: ' + file.name.replace(/\.[^.]+$/, ''), 'ok');
+  } catch (e) { toast('IR decode hatası', 'err'); }
 }
 
 function buildSaturationCurve(driveAmount) {
@@ -1231,7 +1377,14 @@ function buildFXChain() {
   node.connect(E.micGain); node = E.micGain;
 
   if (fxState.hpf.on)  { node.connect(E.hpf);        node = E.hpf; }
-  if (fxState.gate.on) { node.connect(E.gate);       node = E.gate; }
+  if (fxState.gate.on) {
+    if (_gateWorkletReady && E.gate instanceof AudioWorkletNode) {
+      E.gate.port.postMessage({ threshold: fxState.gate.val });
+    } else if (E.gate && !(E.gate instanceof AudioWorkletNode)) {
+      E.gate.threshold.value = fxState.gate.val;
+    }
+    node.connect(E.gate); node = E.gate;
+  }
   if (fxState.comp.on) { node.connect(E.compressor); node = E.compressor; }
   if (fxState.eq.on)   { node.connect(E.eq);         node = E.eq; }
 
@@ -1289,11 +1442,20 @@ function connectPlaybackChain(ctx, source, destination, gainValue=1) {
     node.connect(hpf); node = hpf;
   }
   if (fxState.gate.on) {
-    const gate = ctx.createDynamicsCompressor();
-    gate.threshold.value = fxState.gate.val;
-    gate.knee.value = 0; gate.ratio.value = 20;
-    gate.attack.value = 0.001; gate.release.value = 0.05;
-    node.connect(gate); node = gate;
+    try {
+      const gate = new AudioWorkletNode(ctx, 'noise-gate', {
+        numberOfInputs: 1, numberOfOutputs: 1,
+        outputChannelCount: [2],
+        processorOptions: { threshold: fxState.gate.val, attack: 0.001, hold: 0.080, release: 0.150 },
+      });
+      node.connect(gate); node = gate;
+    } catch(_) {
+      const gate = ctx.createDynamicsCompressor();
+      gate.threshold.value = fxState.gate.val;
+      gate.knee.value = 0; gate.ratio.value = 20;
+      gate.attack.value = 0.001; gate.release.value = 0.05;
+      node.connect(gate); node = gate;
+    }
   }
   if (fxState.comp.on) {
     const comp = ctx.createDynamicsCompressor();
@@ -1336,7 +1498,7 @@ function connectPlaybackChain(ctx, source, destination, gainValue=1) {
     const send = ctx.createGain();
     send.gain.value = fxState.reverb.val / 100;
     const conv = ctx.createConvolver();
-    conv.buffer = buildIR(ctx, 1.2);
+    conv.buffer = getReverbIR(ctx);
     node.connect(send); send.connect(conv); conv.connect(destination);
   }
   if (fxState.delay.on && fxState.delay.val > 0) {
@@ -2621,6 +2783,9 @@ async function exportMix() {
 
   toast('Mix render ediliyor...');
   const off = new OfflineAudioContext(2, Math.ceil(totalDur * sr), sr);
+  if (_gateWorkletUrl && fxState.gate.on) {
+    try { await off.audioWorklet.addModule(_gateWorkletUrl); } catch(_) {}
+  }
 
   // Master limiter at output
   const masterLim = off.createDynamicsCompressor();
@@ -2668,6 +2833,9 @@ async function exportOneBreathStem() {
   if (!buf) { toast('One Breath yok', 'err'); return; }
   const sr = E.ctx.sampleRate;
   const off = new OfflineAudioContext(2, Math.ceil(buf.duration * sr) + 100, sr);
+  if (_gateWorkletUrl && fxState.gate.on) {
+    try { await off.audioWorklet.addModule(_gateWorkletUrl); } catch(_) {}
+  }
   const masterLim = off.createDynamicsCompressor();
   masterLim.threshold.value = -1; masterLim.knee.value = 0; masterLim.ratio.value = 20;
   masterLim.attack.value = 0.001; masterLim.release.value = 0.05;
@@ -2756,6 +2924,52 @@ function bufToWav16TPDF(buf) {
     }
   }
   return ab;
+}
+
+// ═══ MIC DEBUG PANEL ═══
+function toggleMicDebug() {
+  const pre = document.getElementById('micDebugPre');
+  if (!pre) return;
+  const show = pre.style.display === 'none';
+  pre.style.display = show ? 'block' : 'none';
+  if (show) refreshMicDebug();
+}
+
+function refreshMicDebug() {
+  const pre = document.getElementById('micDebugPre');
+  if (!pre || pre.style.display === 'none') return;
+  if (!E.micStream) { pre.textContent = 'No stream'; return; }
+  const track = E.micStream.getAudioTracks()[0];
+  if (!track) { pre.textContent = 'No audio track'; return; }
+  const settings  = track.getSettings    ? track.getSettings()    : {};
+  const supported = navigator.mediaDevices.getSupportedConstraints();
+  pre.textContent = JSON.stringify({
+    REQUESTED: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl:  false,
+      sampleRate: parseInt(document.getElementById('srSelect').value),
+    },
+    ACTUAL: {
+      label:            track.label || '(no label)',
+      channelCount:     settings.channelCount,
+      sampleRate:       settings.sampleRate,
+      sampleSize:       settings.sampleSize,
+      echoCancellation: settings.echoCancellation,
+      noiseSuppression: settings.noiseSuppression,
+      autoGainControl:  settings.autoGainControl,
+      latency:          settings.latency !== undefined ? (+settings.latency).toFixed(4) + 's' : 'N/A',
+    },
+    SUPPORTED: {
+      echoCancellation: !!supported.echoCancellation,
+      noiseSuppression: !!supported.noiseSuppression,
+      autoGainControl:  !!supported.autoGainControl,
+      sampleRate:       !!supported.sampleRate,
+      channelCount:     !!supported.channelCount,
+      latency:          !!supported.latency,
+    },
+    GATE: _gateWorkletReady ? 'AudioWorklet (true gate)' : 'DynamicsCompressor (fallback)',
+  }, null, 2);
 }
 
 // ═══ METER with peak hold ═══
@@ -2868,6 +3082,15 @@ function applyFXParam(id, val) {
     case 'gate':   E.gate.threshold.value = val; break;
     case 'sat':    E.saturator.curve = buildSaturationCurve(val/100); break;
   }
+}
+
+let _monitorWarnShown = false;
+function warnMonitor(val) {
+  if (parseInt(val) > 0 && !_monitorWarnShown) {
+    _monitorWarnShown = true;
+    toast('Monitor açık — kulaklık takın, hoparlörde feedback!', 'warn');
+  }
+  if (parseInt(val) === 0) _monitorWarnShown = false;
 }
 
 function toggleMasterLimiter() {
