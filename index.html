@@ -403,6 +403,13 @@ html, body {
   cursor:pointer; position:relative; flex-shrink:0;
   transition:all .2s;
 }
+.loop-bars-sel {
+  height:28px; padding:0 6px; border-radius:5px;
+  border:1px solid var(--border); background:var(--surface2);
+  color:var(--text3); font-family:'IBM Plex Mono'; font-size:9px;
+  cursor:pointer; flex-shrink:0;
+}
+.loop-bars-sel:focus { outline:none; border-color:var(--rec-red); }
 .t-rec:active { transform:scale(0.9); }
 .t-rec-dot { width:22px; height:22px; border-radius:50%; background:var(--rec-red); transition:all .2s; }
 .t-rec.recording { background:var(--rec-red); border-color:var(--rec-red); box-shadow:0 0 24px var(--rec-red-glow); }
@@ -589,6 +596,7 @@ html, body {
       <button class="cf-btn active" id="cfCut" onclick="setCf('cut')">CUT</button>
       <button class="cf-btn" id="cfXfade" onclick="setCf('xfade')">XFADE</button>
       <button class="cf-btn" id="cfPunch" onclick="setCf('punch')">PUNCH</button>
+      <button class="cf-btn" id="cfTight" onclick="setCf('tight')" title="Yeni take'i ilk transient'e kırpar — sert konsonantlar için">TIGHT</button>
       <button class="cf-auto-btn on" id="cfAutoBtn" onclick="toggleAutoTransition()" title="Otomatik geçiş analizi — her take'ten sonra en iyi modu seçer">AUTO</button>
       <div class="cf-spacer"></div>
       <button class="cf-ai-btn" onclick="openDrawer('ai')" title="AI Ses Devamı — ElevenLabs ile sesinizi kopyalayıp flow'a devam edin">AI</button>
@@ -619,6 +627,13 @@ html, body {
     <button class="t-btn" id="tBeatPlay" onclick="toggleBeat()">▶</button>
     <button class="t-btn" id="tStop" onclick="stopAll()">■</button>
     <button class="t-rec" id="tRec" onclick="toggleRec()"><div class="t-rec-dot"></div></button>
+    <select id="loopBars" class="loop-bars-sel" title="Loop record — otomatik durdurma">
+      <option value="0">FREE</option>
+      <option value="1">1 bar</option>
+      <option value="2" selected>2 bar</option>
+      <option value="4">4 bar</option>
+      <option value="8">8 bar</option>
+    </select>
     <div class="t-timer" id="tTimer">0:00</div>
     <div class="t-info">
       <div class="t-info-main" id="tInfoMain">Hazır</div>
@@ -655,6 +670,10 @@ html, body {
     <div class="s-row">
       <span class="s-label">Master Limiter</span>
       <button class="fx-sw on" id="masterLimiterSw" onclick="toggleMasterLimiter()"></button>
+    </div>
+    <div class="s-row">
+      <div><div class="s-label">Tonal Match</div><div class="s-desc">One Breath'te take'ler arası ton eşitleme</div></div>
+      <button class="fx-sw on" id="tonalMatchSw" onclick="toggleTonalMatch()"></button>
     </div>
     <div class="s-row">
       <div><div class="s-label">Reverb Mode</div><div class="s-desc">IR tipi — live + export paylaşır</div></div>
@@ -867,6 +886,8 @@ const E = {
 
   autosave: true,
   autoTransition: true,
+  tonalMatch: true,
+  _loopTimer: null,
   reverbIrMode: 'medium',
   userIRBuffer: null,
   db: null,
@@ -958,14 +979,16 @@ async function initGate() {
 
 // Locked FX defs per engineering memory
 const FX_DEFS = [
-  { id:'comp',    name:'Compressor',   min:0,   max:100, val:60,  unit:'%',  default_on:true  },
-  { id:'eq',      name:'EQ 3.5k',      min:-12, max:12,  val:3,   unit:'dB', default_on:true  },
-  { id:'deess',   name:'De-Esser',     min:0,   max:100, val:40,  unit:'%',  default_on:true  },
-  { id:'reverb',  name:'Reverb 1.2s',  min:0,   max:100, val:18,  unit:'%',  default_on:false },
-  { id:'delay',   name:'Delay 1/8.',   min:0,   max:100, val:12,  unit:'%',  default_on:false },
-  { id:'hpf',     name:'Hi-Pass',      min:40,  max:400, val:110, unit:'Hz', default_on:true  },
-  { id:'gate',    name:'Noise Gate',   min:-80, max:-20, val:-52, unit:'dB', default_on:false },
-  { id:'sat',     name:'Saturation',   min:0,   max:100, val:25,  unit:'%',  default_on:false },
+  { id:'comp',     name:'Compressor',   min:0,   max:100, val:60,  unit:'%',  default_on:true  },
+  { id:'eq',       name:'EQ 3.5k',      min:-12, max:12,  val:3,   unit:'dB', default_on:true  },
+  { id:'deess',    name:'De-Esser',     min:0,   max:100, val:40,  unit:'%',  default_on:true  },
+  { id:'reverb',   name:'Reverb',       min:0,   max:100, val:18,  unit:'%',  default_on:false },
+  { id:'delay',    name:'Delay 1/8.',   min:0,   max:100, val:12,  unit:'%',  default_on:false },
+  { id:'hpf',      name:'Hi-Pass',      min:40,  max:400, val:110, unit:'Hz', default_on:true  },
+  { id:'gate',     name:'Noise Gate',   min:-80, max:-20, val:-52, unit:'dB', default_on:false },
+  { id:'sat',      name:'Saturation',   min:0,   max:100, val:25,  unit:'%',  default_on:false },
+  { id:'parallel', name:'NY Parallel',  min:0,   max:100, val:35,  unit:'%',  default_on:false },
+  { id:'air',      name:'Air 8kHz',     min:0,   max:100, val:28,  unit:'%',  default_on:false },
 ];
 const fxState = {};
 FX_DEFS.forEach(f => fxState[f.id] = { on: f.default_on, val: f.val });
@@ -1274,6 +1297,28 @@ function initFX() {
   E.saturator.curve = buildSaturationCurve(0.25);
   E.saturator.oversample = '2x';
 
+  // NY Parallel compression (split → heavy comp → blend back)
+  E.parallelComp = c.createDynamicsCompressor();
+  E.parallelComp.threshold.value = -30;
+  E.parallelComp.knee.value = 3;
+  E.parallelComp.ratio.value = 6;
+  E.parallelComp.attack.value = 0.005;
+  E.parallelComp.release.value = 0.08;
+  E.parallelWet = c.createGain();
+  E.parallelWet.gain.value = 0.35;
+  E.parallelBus = c.createGain();
+
+  // Air Exciter: HPF → gentle saturation → blend
+  E.airHP = c.createBiquadFilter();
+  E.airHP.type = 'highpass';
+  E.airHP.frequency.value = 8000;
+  E.airHP.Q.value = 0.7;
+  E.airSat = c.createWaveShaper();
+  E.airSat.curve = buildSaturationCurve(0.06);
+  E.airSend = c.createGain();
+  E.airSend.gain.value = 0.14;
+  E.airBus = c.createGain();
+
   // Analyser + monitor + master limiter
   E.analyser = c.createAnalyser();
   E.analyser.fftSize = 2048;
@@ -1365,7 +1410,9 @@ function buildSaturationCurve(driveAmount) {
 function buildFXChain() {
   const nodes = [E.micSrc, E.micGain, E.hpf, E.gate, E.compressor, E.eq,
                  E.deEsserSide, E.deEsserBand, E.deEsser,
-                 E.saturator, E.analyser, E.reverb, E.reverbSend,
+                 E.saturator, E.parallelComp, E.parallelWet, E.parallelBus,
+                 E.airHP, E.airSat, E.airSend, E.airBus,
+                 E.analyser, E.reverb, E.reverbSend,
                  E.delay, E.delaySend];
   nodes.forEach(n => { try { n && n.disconnect(); } catch(e){} });
 
@@ -1407,6 +1454,27 @@ function buildFXChain() {
     E.saturator.curve = buildSaturationCurve(fxState.sat.val / 100);
     node.connect(E.saturator);
     node = E.saturator;
+  }
+
+  if (fxState.parallel.on) {
+    E.parallelWet.gain.value = fxState.parallel.val / 100;
+    try { E.parallelBus.disconnect(); } catch(_) {}
+    node.connect(E.parallelBus);
+    node.connect(E.parallelComp);
+    E.parallelComp.connect(E.parallelWet);
+    E.parallelWet.connect(E.parallelBus);
+    node = E.parallelBus;
+  }
+
+  if (fxState.air.on) {
+    E.airSend.gain.value = fxState.air.val / 200;
+    try { E.airBus.disconnect(); } catch(_) {}
+    node.connect(E.airBus);
+    node.connect(E.airHP);
+    E.airHP.connect(E.airSat);
+    E.airSat.connect(E.airSend);
+    E.airSend.connect(E.airBus);
+    node = E.airBus;
   }
 
   // Main out → monitor (hears self back if volume > 0)
@@ -1490,6 +1558,31 @@ function connectPlaybackChain(ctx, source, destination, gainValue=1) {
     shaper.curve = buildSaturationCurve(fxState.sat.val / 100);
     shaper.oversample = '2x';
     node.connect(shaper); node = shaper;
+  }
+
+  if (fxState.parallel.on) {
+    const bus = ctx.createGain();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -30; comp.knee.value = 3;
+    comp.ratio.value = 6; comp.attack.value = 0.005; comp.release.value = 0.08;
+    const wet = ctx.createGain();
+    wet.gain.value = fxState.parallel.val / 100;
+    node.connect(bus);
+    node.connect(comp); comp.connect(wet); wet.connect(bus);
+    node = bus;
+  }
+
+  if (fxState.air.on) {
+    const bus = ctx.createGain();
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 8000; hp.Q.value = 0.7;
+    const sat = ctx.createWaveShaper();
+    sat.curve = buildSaturationCurve(0.06);
+    const send = ctx.createGain();
+    send.gain.value = fxState.air.val / 200;
+    node.connect(bus);
+    node.connect(hp); hp.connect(sat); sat.connect(send); send.connect(bus);
+    node = bus;
   }
 
   node.connect(destination);
@@ -1621,7 +1714,25 @@ function stopAll() {
 }
 
 // ═══ RECORDING — fixed warmup + beat offset capture ═══
-async function toggleRec() { E.recording ? stopRec() : startRec(); }
+async function toggleRec() {
+  if (E.recording) {
+    clearTimeout(E._loopTimer); E._loopTimer = null;
+    stopRec();
+  } else {
+    startLoopRec();
+  }
+}
+
+function startLoopRec() {
+  const bars = parseInt(document.getElementById('loopBars')?.value || 0);
+  if (!bars) { startRec(); return; }
+  const bpm = parseInt(document.getElementById('bpmInput')?.value || 140);
+  const durMs = bars * 4 * (60000 / bpm);
+  startRec();
+  E._loopTimer = setTimeout(() => {
+    if (E.recording) { clearTimeout(E._loopTimer); E._loopTimer = null; stopRec(); }
+  }, durMs);
+}
 
 async function startRec() {
   if (E.takes.length >= MAX_TAKES) {
@@ -2130,11 +2241,21 @@ function buildOneBreathBuffer() {
   const microFade = Math.floor(sr * MICRO_FADE_MS / 1000);
   const mode = E.cfMode;
 
-  const segments = valid.map(t => {
+  // First pass: normalize loudness on all segments
+  const normalized = valid.map(t => {
     const mono = ensureSRMono(t.buffer, sr);
     const trimmed = trimDB(mono, sr, ONE_BREATH_TRIM_DB, ONE_BREATH_GUARD_MS);
-    const matched = rmsMatch(trimmed, TARGET_RMS_LUFS_ISH);
-    return applyEdgeFades(matched, microFade);
+    return rmsMatch(trimmed, TARGET_RMS_LUFS_ISH);
+  });
+
+  // Compute spectral reference tilt from take 0
+  const refTilt = E.tonalMatch && normalized[0]?.length > 0
+    ? spectralTilt(normalized[0], sr) : null;
+
+  const segments = normalized.map((matched, i) => {
+    const tiltFixed = (E.tonalMatch && refTilt && i > 0)
+      ? matchSpectralTilt(matched, sr, refTilt) : matched;
+    return applyEdgeFades(tiltFixed, microFade);
   }).filter(seg => seg.length > 0);
 
   if (!segments.length) return null;
@@ -2147,11 +2268,59 @@ function buildOneBreathBuffer() {
       out = crossfade(out, next, fadeSamples);
     } else if (mode === 'punch') {
       out = punchJoin(out, next, Math.floor(fadeSamples * 0.35), microFade);
+    } else if (mode === 'tight') {
+      out = tightJoin(out, next, microFade);
     } else {
-      out = butJoin(out, next, microFade); // click-free cut
+      out = butJoin(out, next, microFade);
     }
   }
   return f32ToBuf(out, sr);
+}
+
+// ─── Spectral tilt helpers ───
+function spectralTilt(data, sr) {
+  // Ratio of high-freq energy (>3kHz) to total, via 1-pole IIR HP
+  const r = 1 - (2 * Math.PI * 3000 / sr);
+  let hiSum = 0, totSum = 0;
+  let xPrev = 0, hp = 0;
+  const skip = Math.floor(sr * 0.015); // skip first 15ms onset
+  for (let i = skip; i < data.length; i++) {
+    hp = r * (hp + data[i] - xPrev);
+    hiSum  += hp * hp;
+    totSum += data[i] * data[i];
+    xPrev = data[i];
+  }
+  return totSum > 0 ? hiSum / totSum : 0.5;
+}
+
+function applyHighShelf(data, sr, gainDb, freq) {
+  // out[n] = data[n] + hp[n] * (G - 1)  where G = linear shelf gain
+  const G = Math.pow(10, gainDb / 20);
+  const r = 1 - (2 * Math.PI * freq / sr);
+  const out = new Float32Array(data.length);
+  let xPrev = 0, hp = 0;
+  for (let i = 0; i < data.length; i++) {
+    hp = r * (hp + data[i] - xPrev);
+    out[i] = data[i] + hp * (G - 1);
+    xPrev = data[i];
+  }
+  return out;
+}
+
+function matchSpectralTilt(data, sr, refTilt) {
+  const srcTilt = spectralTilt(data, sr);
+  if (srcTilt < 1e-10 || refTilt < 1e-10) return data;
+  const gainDb = 10 * Math.log10(refTilt / srcTilt); // half-power shelf
+  const clamped = Math.max(-6, Math.min(6, gainDb));
+  if (Math.abs(clamped) < 0.8) return data;
+  return applyHighShelf(data, sr, clamped, 3000);
+}
+
+function toggleTonalMatch() {
+  E.tonalMatch = !E.tonalMatch;
+  document.getElementById('tonalMatchSw').classList.toggle('on', E.tonalMatch);
+  markOneBreathDirty();
+  toast(E.tonalMatch ? 'Tonal Match: AÇIK' : 'Tonal Match: KAPALI');
 }
 
 function ensureSRMono(buffer, targetSr) {
@@ -2327,9 +2496,28 @@ function hidePlayhead() {
 function setCf(mode) {
   E.cfMode = mode;
   markOneBreathDirty();
-  ['cfCut','cfXfade','cfPunch'].forEach(id => document.getElementById(id).classList.remove('active'));
-  document.getElementById(mode === 'cut' ? 'cfCut' : mode === 'xfade' ? 'cfXfade' : 'cfPunch').classList.add('active');
+  ['cfCut','cfXfade','cfPunch','cfTight'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.classList.remove('active');
+  });
+  const idMap = { cut:'cfCut', xfade:'cfXfade', punch:'cfPunch', tight:'cfTight' };
+  const el = document.getElementById(idMap[mode]);
+  if (el) el.classList.add('active');
   renderLanes();
+}
+
+function findFirstOnset(data, threshRms = 0.012) {
+  const win = 64;
+  for (let i = 0; i < data.length - win; i += 16) {
+    let s = 0;
+    for (let j = 0; j < win; j++) s += data[i + j] * data[i + j];
+    if (Math.sqrt(s / win) > threshRms) return Math.max(0, i - 16);
+  }
+  return 0;
+}
+
+function tightJoin(a, b, microFade) {
+  const onset = findFirstOnset(b);
+  return butJoin(a, onset > 0 ? b.slice(onset) : b, microFade);
 }
 
 // ═══ BPM DETECTION (onset autocorrelation) ═══
@@ -2517,30 +2705,30 @@ function analyzeTransitionBoundary(prevTake, newTake, sr) {
 
   let mode, ms;
 
+  // TIGHT: high ZCR = consonant/hard attack at head AND head has clear onset
+  const onsetSmp = findFirstOnset(head, 0.010);
+  const onsetMs  = Math.round(onsetSmp / sr * 1000);
+
   if (tailDb < -38 && headDb < -38) {
-    // Both boundaries silent → clean cut
-    mode = 'cut';
-    ms = 4;
+    mode = 'cut'; ms = 4;
+  } else if (headZcr > 0.22 && headRms > 0.018 && tailShortDb < -20) {
+    // Hard consonant attack on new take → TIGHT trim to first onset
+    mode = 'tight'; ms = 2;
   } else if (tailShortDb < -28 && headDb > -20) {
     // Previous decays to silence, new take attacks sharply → PUNCH
     mode = 'punch';
-    // Punch overlap: proportional to how loud the new head is
     ms = Math.round(Math.min(220, Math.max(60, (-headDb / 20) * 180)));
   } else if (tailDb > -22 && headDb > -18) {
-    // Both sides have energy → XFADE; find best fade length
+    // Both sides have energy → XFADE
     ms = computeOptimalXfadeMs(tail, head, sr);
     mode = 'xfade';
   } else if (tailDb > -22 && headDb < -30) {
-    // Previous still loud but new starts quiet → short XFADE
-    mode = 'xfade';
-    ms = 80;
+    mode = 'xfade'; ms = 80;
   } else {
-    // Default: cut with micro-fade
-    mode = 'cut';
-    ms = 6;
+    mode = 'cut'; ms = 6;
   }
 
-  return { mode, ms };
+  return { mode, ms, onsetMs };
 }
 
 function computeOptimalXfadeMs(tail, head, sr) {
@@ -2569,8 +2757,11 @@ function applyAutoTransition(result, takeIdx) {
   const cfInput = document.getElementById('cfMs');
   if (cfInput) cfInput.value = result.ms;
   markOneBreathDirty();
-  const label = result.mode === 'xfade' ? 'XFADE' : result.mode === 'punch' ? 'PUNCH' : 'CUT';
-  toast(`AUTO: ${label} ${result.ms}ms — Take ${takeIdx + 1}`, 'ok');
+  const labels = { cut:'CUT', xfade:'XFADE', punch:'PUNCH', tight:'TIGHT' };
+  const label = labels[result.mode] || result.mode.toUpperCase();
+  const extra = result.mode === 'tight' && result.onsetMs > 0
+    ? ` (+${result.onsetMs}ms trim)` : ` ${result.ms}ms`;
+  toast(`AUTO: ${label}${extra} — Take ${takeIdx + 1}`, 'ok');
 }
 
 // ═══ AI VOICE CONTINUATION (ElevenLabs) ═══
@@ -3079,8 +3270,10 @@ function applyFXParam(id, val) {
     case 'reverb': E.reverbSend.gain.value = val/100; break;
     case 'delay':  E.delaySend.gain.value = val/100; break;
     case 'hpf':    E.hpf.frequency.value = val; break;
-    case 'gate':   E.gate.threshold.value = val; break;
-    case 'sat':    E.saturator.curve = buildSaturationCurve(val/100); break;
+    case 'gate':     E.gate.threshold.value = val; break;
+    case 'sat':      E.saturator.curve = buildSaturationCurve(val/100); break;
+    case 'parallel': if (E.parallelWet) E.parallelWet.gain.value = val/100; break;
+    case 'air':      if (E.airSend)     E.airSend.gain.value = val/200; break;
   }
 }
 
