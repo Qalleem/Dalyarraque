@@ -710,7 +710,7 @@ html, body {
     <select class="s-select" id="selInput" onchange="setInput(this.value)"></select>
   </div>
   <div class="s-row">
-    <div><div class="s-label">Latency Comp (ms)</div><div class="s-desc">Kulaklık gecikme telafisi — export'ta uygulanır</div></div>
+    <div><div class="s-label">Latency Comp (ms)</div><div class="s-desc">Hoparlör: 0 ms · Kulaklık/BT: cihaza göre (ör. 150 ms) — export'ta uygulanır</div></div>
     <div style="display:flex; gap:6px; align-items:center;">
       <input class="s-input" type="number" value="150" id="latComp">
       <button class="s-btn primary" onclick="openCalibration()">Ölç</button>
@@ -1644,7 +1644,17 @@ async function enumDevices() {
   document.getElementById('btDot').classList.toggle('on', hasBT);
 }
 
-async function setOutput(id) { E.outputId = id; }
+async function setOutput(id) {
+  E.outputId = id;
+  if (E.ctx?.setSinkId) {
+    try {
+      await E.ctx.setSinkId(id === 'default' ? '' : (id || ''));
+      toast('Çıkış güncellendi', 'ok');
+    } catch(e) {
+      toast('Çıkış yönlendirilemedi', 'warn');
+    }
+  }
+}
 async function setInput(id) {
   try {
     await initMic(id === 'default' ? undefined : id);
@@ -1748,8 +1758,6 @@ async function startRec() {
   const pr = parseInt(document.getElementById('preRoll').value);
   if (pr > 0) await doPreRoll(pr);
 
-  if (E.beatBuf && !E.beatPlaying) playBeat(0);
-
   // Capture beat offset when recording begins
   E.recBeatOffsetAtStart = E.beatPlaying
     ? ((E.ctx.currentTime - E.beatStart) % E.beatBuf.duration)
@@ -1778,6 +1786,11 @@ async function startRec() {
     // Measure warmup: time between .start() call and actual capture start
     const now = E.ctx.currentTime;
     E.recWarmupSec = Math.max(0, now - E.recStartCtxTime);
+    // Advance stored beat offset by warmup delay so playback re-sync is frame-accurate
+    if (E.beatPlaying && E.beatBuf) {
+      E.recBeatOffsetAtStart =
+        (E.recBeatOffsetAtStart + E.recWarmupSec) % E.beatBuf.duration;
+    }
   };
   E.recorder.onstop = () => finishTake(mime);
   E.recorder.onerror = (ev) => {
@@ -2130,9 +2143,10 @@ function playTakeWithTransition(idx) {
     startTakePlay(idx, 0, 0);
   }
 
-  // Beat sync: align beat to take's recorded beat offset
-  if (E.beatBuf) {
-    if (E.beatPlaying) { try { E.beatSrc.stop(); } catch(e){} E.beatSrc = null; }
+  // Beat sync: re-align beat only if it was already playing; don't force-start if user stopped it
+  if (E.beatBuf && E.beatPlaying) {
+    try { E.beatSrc.stop(); } catch(e){}
+    E.beatSrc = null;
     playBeat(t.beatOffset || 0);
   }
 }
@@ -3538,6 +3552,8 @@ document.getElementById('vocalVol').addEventListener('input', () => {
   if (E.oneBreathGain) E.oneBreathGain.gain.value = vol;
 });
 document.getElementById('bpmInput').addEventListener('input', () => {
+  const bpm = parseInt(document.getElementById('bpmInput').value) || 140;
+  document.getElementById('bpmDotLabel').textContent = bpm + ' BPM';
   if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
 });
 
