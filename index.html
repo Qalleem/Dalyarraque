@@ -545,6 +545,20 @@ html, body {
 .hidden { display:none !important; }
 ::-webkit-scrollbar { width:0; height:0; }
 
+/* Beat pitch control */
+.beat-pitch-ctrl { display:flex; align-items:center; gap:4px; margin-left:4px; }
+.beat-pitch-btn {
+  background:var(--surface2); border:1px solid var(--border); color:var(--fl-orange);
+  width:26px; height:26px; border-radius:5px; cursor:pointer; font-size:15px;
+  display:flex; align-items:center; justify-content:center; line-height:1;
+  transition:background 0.12s;
+}
+.beat-pitch-btn:active { background:var(--fl-orange-dim); }
+.beat-pitch-lbl {
+  font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--fl-orange);
+  min-width:28px; text-align:center;
+}
+
 /* Bar-lock button */
 .t-barlock { font-size:10px; letter-spacing:1px; font-weight:700; min-width:34px; color:var(--text2); }
 .t-barlock.active { color:var(--fl-orange); border-color:var(--fl-orange); background:var(--fl-orange-dim); }
@@ -615,6 +629,11 @@ html, body {
       <input type="file" id="beatFile" accept="audio/*" class="hidden" onchange="loadBeat(event)">
       <div class="beat-name-display" id="beatLabel">Beat yükle →</div>
       <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" oninput="E.beatGain.gain.value=this.value/100">
+      <div class="beat-pitch-ctrl hidden" id="beatPitchCtrl">
+        <button class="beat-pitch-btn" onclick="shiftBeatPitch(-1)" title="Yarı ton aşağı">♭</button>
+        <span class="beat-pitch-lbl" id="beatPitchLbl">±0</span>
+        <button class="beat-pitch-btn" onclick="shiftBeatPitch(1)" title="Yarı ton yukarı">♯</button>
+      </div>
     </div>
 
     <div class="timeline-ruler"><canvas class="ruler-canvas" id="rulerCanvas"></canvas></div>
@@ -896,6 +915,7 @@ const E = {
   ctx: null,
   beatBuf: null, beatSrc: null, beatGain: null,
   beatPlaying: false, beatStart: 0, beatOffset: 0,
+  beatPitch: 0, // semitones (-12 … +12)
 
   micStream: null, micSrc: null, micGain: null,
   monitorGain: null, analyser: null, masterLimiter: null,
@@ -1716,8 +1736,48 @@ async function loadBeat(e) {
     document.getElementById('bpmInput').value = detectedBpm;
     document.getElementById('bpmDotLabel').textContent = detectedBpm + ' BPM';
     if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
+    // Reset pitch on new beat load, show pitch control
+    E.beatPitch = 0;
+    _updatePitchUI();
+    document.getElementById('beatPitchCtrl').classList.remove('hidden');
     toast(`✓ Beat yüklendi — ${detectedBpm} BPM`, 'ok');
   } catch (err) { toast('Beat decode hatası', 'err'); }
+}
+
+// ── Beat pitch shift ─────────────────────────────────────────────────────────
+function _beatPlaybackRate() {
+  return Math.pow(2, E.beatPitch / 12);
+}
+
+function _beatElapsedBufSec() {
+  // How far (in buffer-seconds) the beat has played since beatStart
+  return (E.ctx.currentTime - E.beatStart) * _beatPlaybackRate();
+}
+
+function shiftBeatPitch(semitones) {
+  const next = Math.max(-12, Math.min(12, E.beatPitch + semitones));
+  if (next === E.beatPitch) return;
+  // Capture current buffer position before changing rate
+  const currentBufPos = E.beatPlaying
+    ? _beatElapsedBufSec() % E.beatBuf.duration
+    : E.beatOffset;
+  E.beatPitch = next;
+  _updatePitchUI();
+  if (E.beatPlaying) {
+    // Restart at same buffer position with new rate
+    try { E.beatSrc.stop(); } catch(e) {}
+    E.beatSrc = null;
+    E.beatPlaying = false;
+    playBeat(currentBufPos);
+  }
+}
+
+function _updatePitchUI() {
+  const lbl = document.getElementById('beatPitchLbl');
+  if (!lbl) return;
+  const st = E.beatPitch;
+  lbl.textContent = st === 0 ? '±0' : (st > 0 ? '+' + st : '' + st);
+  lbl.style.color = st === 0 ? 'var(--text2)' : 'var(--fl-orange)';
 }
 
 function toggleBeat() {
@@ -1731,20 +1791,22 @@ function playBeat(offset) {
   E.beatSrc = E.ctx.createBufferSource();
   E.beatSrc.buffer = E.beatBuf;
   E.beatSrc.loop = true;
+  E.beatSrc.playbackRate.value = _beatPlaybackRate();
   E.beatSrc.connect(E.beatGain);
   const o = offset ?? E.beatOffset;
   E.beatSrc.start(0, o);
-  E.beatStart = E.ctx.currentTime - o;
+  // beatStart stores ctx time adjusted so elapsed * rate = buffer position
+  E.beatStart = E.ctx.currentTime - o / _beatPlaybackRate();
   E.beatPlaying = true;
   document.getElementById('tBeatPlay').textContent = '⏸';
   document.getElementById('tBeatPlay').classList.add('active');
-  const bpmVal = parseInt(document.getElementById('bpmInput').value || 140);
+  const bpmVal = Math.round((parseInt(document.getElementById('bpmInput').value) || 140) * _beatPlaybackRate());
   startBeatFlash(bpmVal);
 }
 
 function stopBeat() {
   if (E.beatSrc) {
-    E.beatOffset = (E.ctx.currentTime - E.beatStart) % (E.beatBuf?.duration || 1);
+    E.beatOffset = _beatElapsedBufSec() % (E.beatBuf?.duration || 1);
     try { E.beatSrc.stop(); } catch(e){}
     E.beatSrc = null;
   }
@@ -1796,9 +1858,9 @@ async function startRec() {
   const pr = parseInt(document.getElementById('preRoll').value);
   if (pr > 0) await doPreRoll(pr);
 
-  // Capture beat offset when recording begins
+  // Capture beat offset when recording begins (account for playbackRate)
   E.recBeatOffsetAtStart = E.beatPlaying
-    ? ((E.ctx.currentTime - E.beatStart) % E.beatBuf.duration)
+    ? (_beatElapsedBufSec() % E.beatBuf.duration)
     : 0;
 
   const mimeCandidates = [
@@ -1824,10 +1886,10 @@ async function startRec() {
     // Measure warmup: time between .start() call and actual capture start
     const now = E.ctx.currentTime;
     E.recWarmupSec = Math.max(0, now - E.recStartCtxTime);
-    // Advance stored beat offset by warmup delay so playback re-sync is frame-accurate
+    // Advance stored beat offset by warmup delay (scaled by playbackRate)
     if (E.beatPlaying && E.beatBuf) {
       E.recBeatOffsetAtStart =
-        (E.recBeatOffsetAtStart + E.recWarmupSec) % E.beatBuf.duration;
+        (E.recBeatOffsetAtStart + E.recWarmupSec * _beatPlaybackRate()) % E.beatBuf.duration;
     }
   };
   E.recorder.onstop = () => finishTake(mime);
@@ -3638,13 +3700,16 @@ function toggleBarLock() {
 async function _waitNextBar() {
   if (!E.beatBuf || !E.beatPlaying) return;
   const bpm = parseInt(document.getElementById('bpmInput').value) || 140;
-  const barDur = (60 / bpm) * 4;
-  const beatPos = (E.ctx.currentTime - E.beatStart) % (E.beatBuf.duration);
-  const posInBar = beatPos % barDur;
-  const waitSec = (barDur - posInBar) % barDur;
-  if (waitSec < 0.05) return;
+  // barDur in buffer-seconds (playbackRate already affects perceived tempo)
+  const barBufDur = (60 / bpm) * 4;
+  const beatBufPos = _beatElapsedBufSec() % E.beatBuf.duration;
+  const posInBar = beatBufPos % barBufDur;
+  const waitBufSec = (barBufDur - posInBar) % barBufDur;
+  if (waitBufSec < 0.05) return;
+  // Convert buffer-seconds to real-time seconds
+  const waitRealSec = waitBufSec / _beatPlaybackRate();
   document.getElementById('tInfoMain').textContent = '⏳ Bar bekleniyor...';
-  await new Promise(r => setTimeout(r, (waitSec * 1000) - 15));
+  await new Promise(r => setTimeout(r, waitRealSec * 1000 - 15));
 }
 
 // ── F3: BEAT GRID WAVEFORM OVERLAY ──────────────────────────────────────────
@@ -3710,7 +3775,7 @@ function initRulerScrub() {
 }
 
 function seekTo(timeSec) {
-  // Seek beat
+  // Seek beat (timeSec is buffer-position)
   if (E.beatBuf) {
     const wasPlaying = E.beatPlaying;
     if (E.beatSrc) { try { E.beatSrc.stop(); } catch(err){} E.beatSrc = null; }
