@@ -1,0 +1,37 @@
+{
+  "name": "QVLLEN BOOTH",
+  "short_name": "QVLLEN",
+  "description": "Profesyonel web vokal kayıt stüdyosu — beat sync, multi-take, One Breath",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#111114",
+  "theme_color": "#1a1a1f",
+  "orientation": "portrait-primary",
+  "lang": "tr",
+  "categories": ["music", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Kayıt Başlat",
+      "short_name": "REC",
+      "description": "Yeni take kaydı başlat",
+      "url": "./"
+    }
+  ],
+  "screenshots": []
+}

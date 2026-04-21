@@ -544,7 +544,38 @@ html, body {
 
 .hidden { display:none !important; }
 ::-webkit-scrollbar { width:0; height:0; }
+
+/* Bar-lock button */
+.t-barlock { font-size:10px; letter-spacing:1px; font-weight:700; min-width:34px; color:var(--text2); }
+.t-barlock.active { color:var(--fl-orange); border-color:var(--fl-orange); background:var(--fl-orange-dim); }
+
+/* TAP button flash */
+@keyframes tapFlash { 0%{background:var(--fl-orange)}100%{background:transparent} }
+.tap-flash { animation: tapFlash 0.15s ease-out; }
+
+/* PWA install banner */
+#swUpdateBanner {
+  position:fixed; bottom:76px; left:50%; transform:translateX(-50%);
+  background:var(--surface); border:1px solid var(--fl-orange);
+  color:var(--text); padding:10px 16px; border-radius:var(--radius);
+  z-index:9999; display:flex; align-items:center; gap:10px;
+  font-size:13px; white-space:nowrap; box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+#swUpdateBanner button {
+  background:var(--fl-orange); color:#000; border:0;
+  padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:700;
+  font-size:12px;
+}
 </style>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a1f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="QVLLEN">
+<link rel="apple-touch-icon" href="icon.svg">
 </head>
 <body>
 
@@ -573,6 +604,7 @@ html, body {
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
     <div class="h-indicator"><div class="h-dot" id="saveDot"></div> DB</div>
     <div class="h-indicator"><div class="h-dot" id="bpmDot"></div> <span id="bpmDotLabel">—</span></div>
+    <button class="h-btn hidden" id="installBtn" onclick="promptInstall()" title="Uygulamayı Ana Ekrana Ekle">⬇</button>
     <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
     <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
   </div>
@@ -626,6 +658,7 @@ html, body {
   <div class="transport">
     <button class="t-btn" id="tBeatPlay" onclick="toggleBeat()">▶</button>
     <button class="t-btn" id="tStop" onclick="stopAll()">■</button>
+    <button class="t-btn t-barlock" id="barLockBtn" onclick="toggleBarLock()" title="Bar-lock: kayda bir sonraki bar başında gir">BAR</button>
     <button class="t-rec" id="tRec" onclick="toggleRec()"><div class="t-rec-dot"></div></button>
     <select id="loopBars" class="loop-bars-sel" title="Loop record — otomatik durdurma">
       <option value="0">FREE</option>
@@ -726,8 +759,11 @@ html, body {
     </select>
   </div>
   <div class="s-row">
-    <div><div class="s-label">BPM</div><div class="s-desc">Delay dotted-8th sync için</div></div>
-    <input class="s-input" type="number" value="140" id="bpmInput" min="40" max="300">
+    <div><div class="s-label">BPM</div><div class="s-desc">Delay dotted-8th sync · TAP ile ölç</div></div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input class="s-input" type="number" value="140" id="bpmInput" min="40" max="300" style="width:64px;">
+      <button class="s-btn primary" id="tapBtn" onclick="tapTempo()" style="min-width:52px;font-weight:700;letter-spacing:1px;">TAP</button>
+    </div>
   </div>
   <div class="s-row">
     <div><div class="s-label">Sample Rate</div></div>
@@ -1129,6 +1165,7 @@ async function initAll(restoreTakes=false) {
     renderFXGrid();
     renderLanes();
     drawRuler();
+    initRulerScrub();
     startMeter();
     setupResizeObserver();
 
@@ -1733,9 +1770,10 @@ async function toggleRec() {
   if (E.recording) {
     clearTimeout(E._loopTimer); E._loopTimer = null;
     stopRec();
-  } else {
-    startLoopRec();
+    return;
   }
+  if (_barLock) await _waitNextBar();
+  startLoopRec();
 }
 
 function startLoopRec() {
@@ -2063,6 +2101,9 @@ function drawLaneWaveform(idx) {
   ctx.strokeStyle = baseColor + '0.15)';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+  // Beat grid overlay
+  drawBeatGrid(ctx, w, h, t);
 }
 
 function startLiveViz() {
@@ -3557,6 +3598,177 @@ document.getElementById('bpmInput').addEventListener('input', () => {
   if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
 });
 
+// ── F1: TAP TEMPO ────────────────────────────────────────────────────────────
+let _tapTimes = [], _tapTimer = null;
+
+function tapTempo() {
+  const now = performance.now();
+  _tapTimes.push(now);
+  clearTimeout(_tapTimer);
+  _tapTimer = setTimeout(() => { _tapTimes = []; }, 2500);
+  if (_tapTimes.length > 8) _tapTimes.shift();
+  if (_tapTimes.length < 2) {
+    document.getElementById('tInfoMain').textContent = 'Tap...';
+    return;
+  }
+  let sum = 0;
+  for (let i = 1; i < _tapTimes.length; i++) sum += _tapTimes[i] - _tapTimes[i - 1];
+  const bpm = Math.round(60000 / (sum / (_tapTimes.length - 1)));
+  const clamped = Math.max(40, Math.min(300, bpm));
+  document.getElementById('bpmInput').value = clamped;
+  document.getElementById('bpmDotLabel').textContent = clamped + ' BPM';
+  document.getElementById('tInfoMain').textContent = `♩ ${clamped} BPM`;
+  if (E.delay && E.ctx) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
+  // Visual flash on TAP button
+  const btn = document.getElementById('tapBtn');
+  btn.classList.remove('tap-flash');
+  void btn.offsetWidth;
+  btn.classList.add('tap-flash');
+}
+
+// ── F2: BAR-LOCK RECORD START ────────────────────────────────────────────────
+let _barLock = false;
+
+function toggleBarLock() {
+  _barLock = !_barLock;
+  document.getElementById('barLockBtn').classList.toggle('active', _barLock);
+  toast(_barLock ? 'Bar-lock açık — kayıt bir sonraki bar\'da başlar' : 'Bar-lock kapalı', 'ok');
+}
+
+async function _waitNextBar() {
+  if (!E.beatBuf || !E.beatPlaying) return;
+  const bpm = parseInt(document.getElementById('bpmInput').value) || 140;
+  const barDur = (60 / bpm) * 4;
+  const beatPos = (E.ctx.currentTime - E.beatStart) % (E.beatBuf.duration);
+  const posInBar = beatPos % barDur;
+  const waitSec = (barDur - posInBar) % barDur;
+  if (waitSec < 0.05) return;
+  document.getElementById('tInfoMain').textContent = '⏳ Bar bekleniyor...';
+  await new Promise(r => setTimeout(r, (waitSec * 1000) - 15));
+}
+
+// ── F3: BEAT GRID WAVEFORM OVERLAY ──────────────────────────────────────────
+function drawBeatGrid(ctx2d, w, h, take) {
+  if (!E.beatBuf) return;
+  const bpm = parseInt(document.getElementById('bpmInput')?.value) || 140;
+  const takeDur = take.buffer.duration;
+  if (takeDur < 0.1 || bpm < 1) return;
+  const beatDur = 60 / bpm;
+  const barDur  = beatDur * 4;
+  const beatOff = take.beatOffset || 0;
+  const pxPerSec = w / takeDur;
+
+  const firstBeat = (beatDur - (beatOff % beatDur)) % beatDur;
+  const firstBar  = (barDur  - (beatOff % barDur))  % barDur;
+
+  ctx2d.save();
+  // Beat lines
+  ctx2d.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx2d.lineWidth = 0.75;
+  for (let t = firstBeat; t <= takeDur + 0.001; t += beatDur) {
+    const x = Math.round(t * pxPerSec);
+    ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, h); ctx2d.stroke();
+  }
+  // Bar lines (orange)
+  ctx2d.strokeStyle = 'rgba(255,109,0,0.38)';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.font = '8px "IBM Plex Mono", monospace';
+  ctx2d.textAlign = 'left';
+  let barNum = 1;
+  for (let t = firstBar; t <= takeDur + 0.001; t += barDur, barNum++) {
+    const x = Math.round(t * pxPerSec);
+    ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, h); ctx2d.stroke();
+    if (x + 4 < w) {
+      ctx2d.fillStyle = 'rgba(255,109,0,0.45)';
+      ctx2d.fillText(barNum, x + 2, h - 3);
+    }
+  }
+  ctx2d.restore();
+}
+
+// ── F4: TIMELINE SCRUBBING ───────────────────────────────────────────────────
+function initRulerScrub() {
+  const cvs = document.getElementById('rulerCanvas');
+  if (!cvs) return;
+  cvs.style.cursor = 'crosshair';
+
+  function scrubAt(clientX) {
+    const rect = cvs.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const w = rect.width;
+    const dur = E.beatBuf?.duration || getOneBreathBuffer(false)?.duration || 60;
+    const pxPerSec = (w - 64) / Math.max(1, dur);
+    const t = Math.max(0, Math.min((x - 64) / pxPerSec, dur));
+    seekTo(t);
+  }
+
+  cvs.addEventListener('click', e => { if (E.ctx) scrubAt(e.clientX); });
+  cvs.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (E.ctx) scrubAt(e.touches[0].clientX);
+  }, { passive: false });
+}
+
+function seekTo(timeSec) {
+  // Seek beat
+  if (E.beatBuf) {
+    const wasPlaying = E.beatPlaying;
+    if (E.beatSrc) { try { E.beatSrc.stop(); } catch(err){} E.beatSrc = null; }
+    E.beatOffset = timeSec % E.beatBuf.duration;
+    E.beatPlaying = false;
+    if (wasPlaying) playBeat(E.beatOffset);
+  }
+  // Seek active take
+  if (E.playingTake >= 0) {
+    const idx = E.playingTake;
+    const take = E.takes[idx];
+    if (take?.buffer) {
+      stopTakePlayback();
+      const takeT = timeSec - (take.beatOffset || 0);
+      if (takeT >= 0 && takeT < take.buffer.duration) {
+        startTakePlay(idx, takeT, 0);
+        showPlayhead(idx, take.buffer.duration - takeT);
+      }
+    }
+  }
+}
+
+// ── F5: KEYBOARD SHORTCUTS ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+  if (!E.ctx) return;
+  const k = e.key;
+
+  if (k === ' ') {
+    e.preventDefault();
+    if (E.recording) stopRec();
+    else if (E.playingTake >= 0) stopTakePlayback();
+    else if (E.playingTake === -2) stopOneBreathPlayback();
+    else if (E.beatPlaying) stopBeat();
+    else playSelected();
+    return;
+  }
+  if (k === 'b' || k === 'B') { e.preventDefault(); toggleBeat(); return; }
+  if (k === 'r' || k === 'R') { e.preventDefault(); toggleRec(); return; }
+  if (k === 'Escape' || k === 's' || k === 'S') { e.preventDefault(); stopAll(); return; }
+  if (k === 'ArrowUp') {
+    e.preventDefault();
+    if (E.selected > 0) { E.selected--; renderLanes(); updateInfo(); }
+    return;
+  }
+  if (k === 'ArrowDown') {
+    e.preventDefault();
+    if (E.selected < E.takes.length - 1) { E.selected++; renderLanes(); updateInfo(); }
+    return;
+  }
+  if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+  if (k === 'm' || k === 'M') { e.preventDefault(); if (E.takes[E.selected]) toggleMute(E.selected); return; }
+  if (k >= '1' && k <= '9') {
+    const idx = parseInt(k) - 1;
+    if (idx < E.takes.length) { e.preventDefault(); E.selected = idx; renderLanes(); updateInfo(); }
+  }
+});
+
 // Before unload: final DB flush
 window.addEventListener('beforeunload', () => {
   E.takes.forEach(t => { try { dbSaveTake(t); } catch(e){} });
@@ -3564,6 +3776,60 @@ window.addEventListener('beforeunload', () => {
 
 // Preflight on load
 window.addEventListener('DOMContentLoaded', preflightCheck);
+
+// ── PWA: Service Worker ──────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            _showSwUpdateBanner();
+          }
+        });
+      });
+    } catch(e) { console.warn('SW kayıt hatası:', e); }
+  });
+}
+
+function _showSwUpdateBanner() {
+  if (document.getElementById('swUpdateBanner')) return;
+  const el = document.createElement('div');
+  el.id = 'swUpdateBanner';
+  el.innerHTML =
+    '🆕 Yeni sürüm hazır — ' +
+    '<button onclick="location.reload()">Yenile</button>' +
+    '<button style="background:transparent;color:var(--text2);margin-left:4px;" ' +
+      'onclick="this.parentElement.remove()">✕</button>';
+  document.body.appendChild(el);
+}
+
+// ── PWA: Install Prompt ──────────────────────────────────────────────────────
+let _pwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  document.getElementById('installBtn')?.classList.remove('hidden');
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBtn')?.classList.add('hidden');
+  _pwaPrompt = null;
+  toast('✓ QVLLEN ana ekrana eklendi', 'ok');
+});
+
+function promptInstall() {
+  if (!_pwaPrompt) return;
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(r => {
+    if (r.outcome === 'accepted') toast('✓ Yükleniyor...', 'ok');
+    _pwaPrompt = null;
+    document.getElementById('installBtn')?.classList.add('hidden');
+  });
+}
 </script>
 </body>
 </html>
