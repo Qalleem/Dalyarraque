@@ -544,7 +544,30 @@ html, body {
 
 .hidden { display:none !important; }
 ::-webkit-scrollbar { width:0; height:0; }
+
+/* PWA install banner */
+#swUpdateBanner {
+  position:fixed; bottom:76px; left:50%; transform:translateX(-50%);
+  background:var(--surface); border:1px solid var(--fl-orange);
+  color:var(--text); padding:10px 16px; border-radius:var(--radius);
+  z-index:9999; display:flex; align-items:center; gap:10px;
+  font-size:13px; white-space:nowrap; box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+#swUpdateBanner button {
+  background:var(--fl-orange); color:#000; border:0;
+  padding:5px 12px; border-radius:5px; cursor:pointer; font-weight:700;
+  font-size:12px;
+}
 </style>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a1f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="QVLLEN">
+<link rel="apple-touch-icon" href="icon.svg">
 </head>
 <body>
 
@@ -573,6 +596,7 @@ html, body {
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
     <div class="h-indicator"><div class="h-dot" id="saveDot"></div> DB</div>
     <div class="h-indicator"><div class="h-dot" id="bpmDot"></div> <span id="bpmDotLabel">—</span></div>
+    <button class="h-btn hidden" id="installBtn" onclick="promptInstall()" title="Uygulamayı Ana Ekrana Ekle">⬇</button>
     <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
     <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
   </div>
@@ -3564,6 +3588,60 @@ window.addEventListener('beforeunload', () => {
 
 // Preflight on load
 window.addEventListener('DOMContentLoaded', preflightCheck);
+
+// ── PWA: Service Worker ──────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            _showSwUpdateBanner();
+          }
+        });
+      });
+    } catch(e) { console.warn('SW kayıt hatası:', e); }
+  });
+}
+
+function _showSwUpdateBanner() {
+  if (document.getElementById('swUpdateBanner')) return;
+  const el = document.createElement('div');
+  el.id = 'swUpdateBanner';
+  el.innerHTML =
+    '🆕 Yeni sürüm hazır — ' +
+    '<button onclick="location.reload()">Yenile</button>' +
+    '<button style="background:transparent;color:var(--text2);margin-left:4px;" ' +
+      'onclick="this.parentElement.remove()">✕</button>';
+  document.body.appendChild(el);
+}
+
+// ── PWA: Install Prompt ──────────────────────────────────────────────────────
+let _pwaPrompt = null;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  document.getElementById('installBtn')?.classList.remove('hidden');
+});
+
+window.addEventListener('appinstalled', () => {
+  document.getElementById('installBtn')?.classList.add('hidden');
+  _pwaPrompt = null;
+  toast('✓ QVLLEN ana ekrana eklendi', 'ok');
+});
+
+function promptInstall() {
+  if (!_pwaPrompt) return;
+  _pwaPrompt.prompt();
+  _pwaPrompt.userChoice.then(r => {
+    if (r.outcome === 'accepted') toast('✓ Yükleniyor...', 'ok');
+    _pwaPrompt = null;
+    document.getElementById('installBtn')?.classList.add('hidden');
+  });
+}
 </script>
 </body>
 </html>
