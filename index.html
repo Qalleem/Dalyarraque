@@ -239,6 +239,22 @@ html, body {
   background:rgba(17,17,20,0.5); padding:1px 4px; border-radius:3px;
 }
 
+/* ─── FLOW GRADE & RATING ─── */
+.lane-grade {
+  font-family:'IBM Plex Mono'; font-size:8px; font-weight:700;
+  padding:1px 3px; border-radius:3px; letter-spacing:0.5px; line-height:1.3;
+}
+.grade-A { color:#69f0ae; background:rgba(105,240,174,0.18); }
+.grade-B { color:#40c4ff; background:rgba(64,196,255,0.18); }
+.grade-C { color:#ffca28; background:rgba(255,202,40,0.18); }
+.grade-D { color:#ff5252; background:rgba(255,82,82,0.18); }
+.lane-rating { font-size:10px; line-height:1; }
+.punch-info {
+  position:absolute; left:6px; bottom:4px;
+  font-family:'IBM Plex Mono'; font-size:8px; color:var(--purple);
+  background:rgba(171,71,188,0.18); padding:1px 4px; border-radius:3px;
+}
+
 /* Recording stripe */
 .take-lane.recording .lane-body::after {
   content:''; position:absolute; inset:0;
@@ -753,6 +769,7 @@ html, body {
       <button class="t-act" onclick="playSelected()" title="Dinle">▶</button>
       <button class="t-act undo-act hidden" id="undoBtn" onclick="undoDelete()" title="Geri al">↶</button>
       <button class="t-act del-act" onclick="deleteSelected()" title="Sil">✕</button>
+      <button class="t-act" onclick="buildBestOfTake()" title="En iyi segmentleri birleştir — Best Of take" style="border-color:rgba(171,71,188,0.35);color:var(--purple)">⭐</button>
       <button class="t-act export-act" onclick="exportMix()" title="İndir">↓</button>
     </div>
   </div>
@@ -1010,6 +1027,7 @@ const E = {
   tonalMatch: true,
   vadEnabled: true,
   _loopTimer: null,
+  punchIn: null, punchOut: null, punchLooping: false, _loopAutoStop: false,
   reverbIrMode: 'medium',
   userIRBuffer: null,
   db: null,
@@ -1941,6 +1959,17 @@ async function toggleRec() {
 }
 
 function startLoopRec() {
+  // Punch loop mode: I/O markers both set
+  if (E.punchIn !== null && E.punchOut !== null && E.punchOut > E.punchIn) {
+    const durMs = (E.punchOut - E.punchIn) * 1000;
+    if (E.beatBuf) { stopBeat(); playBeat(E.punchIn); }
+    E.punchLooping = true;
+    startRec();
+    E._loopTimer = setTimeout(() => {
+      if (E.recording) { E._loopAutoStop = true; stopRec(); }
+    }, durMs);
+    return;
+  }
   const bars = parseInt(document.getElementById('loopBars')?.value || 0);
   if (!bars) { startRec(); return; }
   const bpm = parseInt(document.getElementById('bpmInput')?.value || 140);
@@ -2017,6 +2046,8 @@ function stopRec() {
   if (E.recorder && E.recorder.state !== 'inactive') {
     try { E.recorder.stop(); } catch(e){}
   }
+  if (!E._loopAutoStop) E.punchLooping = false; // manual stop kills punch loop
+  E._loopAutoStop = false;
   E.recording = false;
   document.getElementById('tRec').classList.remove('recording');
   document.getElementById('tTimer').classList.remove('recording');
@@ -2064,6 +2095,7 @@ async function finishTake(mime) {
     const buf = await E.ctx.decodeAudioData(ab);
     take.buffer = buf;
     take.duration = buf.duration;
+    take.flowGrade = computeFlowGrade(buf);
     markOneBreathDirty();
     drawLaneWaveform(idx);
 
@@ -2084,6 +2116,14 @@ async function finishTake(mime) {
   updateInfo();
   toast('✓ Take ' + (idx + 1) + ' kaydedildi', 'ok');
   dbSaveTake(take);
+
+  // Punch loop auto-restart
+  if (E.punchLooping && E.takes.length < MAX_TAKES) {
+    await sleep(180);
+    startLoopRec();
+  } else {
+    E.punchLooping = false;
+  }
 }
 
 function updateRecTimer() {
@@ -2115,6 +2155,7 @@ function renderLanes() {
     hdr.innerHTML = `
       <div class="lane-num">${i + 1}</div>
       <div class="lane-status">${t ? fmtTime(t.duration) : (E.recording && i === E.takes.length ? 'REC' : '')}</div>
+      ${t?.flowGrade ? `<span class="lane-grade grade-${t.flowGrade}">${t.flowGrade}</span>` : ''}
     `;
     if (t) {
       const controls = document.createElement('div');
@@ -2122,6 +2163,7 @@ function renderLanes() {
       controls.innerHTML = `
         <button class="lane-ctrl m ${t.muted?'on':''}" data-i="${i}" data-act="mute">M</button>
         <button class="lane-ctrl s ${t.soloed?'on':''}" data-i="${i}" data-act="solo">S</button>
+        ${t.rating ? `<span class="lane-rating">${['','⬇','◉','🔥'][t.rating]}</span>` : ''}
       `;
       hdr.appendChild(controls);
     }
@@ -2994,6 +3036,30 @@ function zcrOf(arr) {
   return arr.length > 1 ? count / arr.length : 0;
 }
 
+function computeFlowGrade(buf) {
+  if (!buf) return null;
+  const data = buf.getChannelData(0);
+  const sr = buf.sampleRate;
+  const frameLen = Math.floor(sr * 0.02); // 20ms frames
+  if (frameLen < 2 || data.length < frameLen * 3) return null;
+  const zcrs = [], rmsFrames = [];
+  for (let i = 0; i + frameLen < data.length; i += frameLen) {
+    const frame = data.slice(i, i + frameLen);
+    zcrs.push(zcrOf(frame));
+    rmsFrames.push(rmsOf(frame));
+  }
+  const zcrMean = zcrs.reduce((a, b) => a + b, 0) / zcrs.length;
+  const zcrVar = zcrs.reduce((a, b) => a + (b - zcrMean) ** 2, 0) / zcrs.length;
+  const phoneme = Math.min(1, Math.sqrt(zcrVar) * 30);
+  const silentRatio = rmsFrames.filter(r => r < 0.008).length / rmsFrames.length;
+  const energy = Math.min(1, rmsOf(data) / 0.15);
+  const score = phoneme * 0.35 + (1 - silentRatio) * 0.40 + energy * 0.25;
+  if (score >= 0.72) return 'A';
+  if (score >= 0.52) return 'B';
+  if (score >= 0.32) return 'C';
+  return 'D';
+}
+
 function analyzeTransitionBoundary(prevTake, newTake, sr) {
   const windowSamples = Math.floor(sr * 0.25); // 250ms analysis window
   const shortSamples  = Math.floor(sr * 0.05); // 50ms for tail decay check
@@ -3060,6 +3126,11 @@ function computeOptimalXfadeMs(tail, head, sr) {
     }
     if (score < bestScore) { bestScore = score; bestMs = cMs; }
   }
+  // BPM-snap: round to nearest 1/8 note boundary
+  const bpm = parseInt(document.getElementById('bpmInput')?.value || 140);
+  const eighthMs = (60000 / bpm) / 2;
+  const snapped = Math.round(bestMs / eighthMs) * eighthMs;
+  bestMs = Math.max(60, Math.min(400, snapped));
   return bestMs;
 }
 
@@ -3073,6 +3144,90 @@ function applyAutoTransition(result, takeIdx) {
   const extra = result.mode === 'tight' && result.onsetMs > 0
     ? ` (+${result.onsetMs}ms trim)` : ` ${result.ms}ms`;
   toast(`AUTO: ${label}${extra} — Take ${takeIdx + 1}`, 'ok');
+}
+
+async function buildBestOfTake() {
+  const actives = E.takes.filter(t => t?.buffer && !t.muted);
+  if (actives.length < 2) { toast('En az 2 aktif take gerekli', 'err'); return; }
+  if (E.takes.length >= MAX_TAKES) { toast('⚠ Max take doldu', 'err'); return; }
+
+  const sr = E.ctx.sampleRate;
+  const bpm = parseInt(document.getElementById('bpmInput')?.value || 140);
+  const segSec = 4 * 60 / bpm * 2; // 2-bar segments
+
+  function scoreSegment(data) {
+    const fl = Math.floor(sr * 0.02);
+    if (data.length < fl * 3) return 0;
+    const zcrs = [], rmsF = [];
+    for (let i = 0; i + fl < data.length; i += fl) {
+      const f = data.slice(i, i + fl);
+      zcrs.push(zcrOf(f)); rmsF.push(rmsOf(f));
+    }
+    const mean = zcrs.reduce((a, b) => a + b, 0) / zcrs.length;
+    const variance = zcrs.reduce((a, b) => a + (b - mean) ** 2, 0) / zcrs.length;
+    const phoneme = Math.min(1, Math.sqrt(variance) * 30);
+    const consistency = 1 - rmsF.filter(r => r < 0.008).length / rmsF.length;
+    return phoneme * 0.4 + consistency * 0.4 + Math.min(1, rmsOf(data) / 0.15) * 0.2;
+  }
+
+  const maxDur = Math.max(...actives.map(t => t.duration));
+  const numSegs = Math.ceil(maxDur / segSec);
+  const bestSegs = [];
+
+  for (let s = 0; s < numSegs; s++) {
+    const s0sec = s * segSec, s1sec = Math.min(s0sec + segSec, maxDur);
+    let bestScore = -1, bestData = null;
+    for (const take of actives) {
+      if (take.duration < s0sec + segSec * 0.4) continue;
+      const ch = take.buffer.getChannelData(0);
+      const i0 = Math.floor(s0sec * sr), i1 = Math.min(Math.floor(s1sec * sr), ch.length);
+      if (i1 <= i0) continue;
+      const seg = ch.slice(i0, i1);
+      const sc = scoreSegment(seg);
+      if (sc > bestScore) { bestScore = sc; bestData = seg; }
+    }
+    if (bestData) bestSegs.push(bestData);
+  }
+
+  if (!bestSegs.length) { toast('Best Of oluşturulamadı', 'err'); return; }
+
+  const fadeN = Math.floor(sr * 0.08);
+  const totalLen = bestSegs.reduce((a, b) => a + b.length, 0) - fadeN * Math.max(0, bestSegs.length - 1);
+  const out = new Float32Array(Math.max(0, totalLen));
+  let pos = 0;
+  for (let i = 0; i < bestSegs.length; i++) {
+    const seg = bestSegs[i];
+    if (i === 0) { out.set(seg, 0); pos = seg.length; continue; }
+    const xfStart = pos - fadeN;
+    for (let j = 0; j < fadeN && j < seg.length; j++) {
+      const t = j / fadeN;
+      out[xfStart + j] = out[xfStart + j] * Math.cos(t * Math.PI / 2) + seg[j] * Math.sin(t * Math.PI / 2);
+    }
+    if (seg.length > fadeN) out.set(seg.slice(fadeN), pos);
+    pos += seg.length - fadeN;
+  }
+
+  const abuf = E.ctx.createBuffer(1, out.length, sr);
+  abuf.getChannelData(0).set(out);
+  const wavAb = bufToWav16TPDF(abuf);
+  const blob = new Blob([wavAb], { type: 'audio/wav' });
+
+  const take = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    blob, buffer: abuf,
+    duration: abuf.duration,
+    beatOffset: 0,
+    muted: false, soloed: false,
+    createdAt: Date.now(),
+    flowGrade: 'A',
+  };
+  E.takes.push(take);
+  E.selected = E.takes.length - 1;
+  markOneBreathDirty();
+  renderLanes(); updateInfo();
+  drawLaneWaveform(E.selected);
+  dbSaveTake(take);
+  toast(`⭐ Best Of eklendi — Take ${E.takes.length} (${numSegs} segment)`, 'ok');
 }
 
 // ═══ AI VOICE CONTINUATION (ElevenLabs) ═══
@@ -3933,7 +4088,31 @@ document.addEventListener('keydown', e => {
   }
   if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
   if (k === 'm' || k === 'M') { e.preventDefault(); if (E.takes[E.selected]) toggleMute(E.selected); return; }
+  // I/O punch loop markers
+  if (k === 'i' || k === 'I') {
+    e.preventDefault();
+    E.punchIn = E.beatPlaying ? (_beatElapsedBufSec() % (E.beatBuf?.duration || 999)) : 0;
+    toast(`IN işaretlendi: ${E.punchIn.toFixed(2)}s`, 'ok');
+    return;
+  }
+  if (k === 'o' || k === 'O') {
+    e.preventDefault();
+    E.punchOut = E.beatPlaying ? (_beatElapsedBufSec() % (E.beatBuf?.duration || 999)) : null;
+    if (E.punchOut !== null) toast(`OUT işaretlendi: ${E.punchOut.toFixed(2)}s — REC ile punch loop başlat`, 'ok');
+    return;
+  }
   if (k >= '1' && k <= '9') {
+    // During One Breath playback: 1/2/3 = rate selected take
+    if (E.playingTake === -2 && (k === '1' || k === '2' || k === '3')) {
+      e.preventDefault();
+      const t = E.takes[E.selected];
+      if (t) {
+        t.rating = parseInt(k);
+        renderLanes();
+        toast(`Take ${E.selected + 1}: ${['','⬇','◉','🔥'][t.rating]}`, 'ok');
+      }
+      return;
+    }
     const idx = parseInt(k) - 1;
     if (idx < E.takes.length) { e.preventDefault(); E.selected = idx; renderLanes(); updateInfo(); }
   }
