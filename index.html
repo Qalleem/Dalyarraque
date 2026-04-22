@@ -559,6 +559,46 @@ html, body {
   min-width:28px; text-align:center;
 }
 
+/* A/B beat slot */
+.beat-ab-btn {
+  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+  padding:3px 7px; border-radius:5px; cursor:pointer;
+  font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700;
+  min-width:24px; text-align:center; flex-shrink:0;
+}
+.beat-ab-btn.b-loaded { color:var(--cyan); border-color:var(--cyan); }
+.beat-ab-btn.slot-b { color:var(--fl-orange); border-color:var(--fl-orange); background:var(--fl-orange-dim); }
+
+/* Beat loop handles */
+.loop-handle-bar { position:relative; height:0; overflow:visible; pointer-events:none; }
+.loop-handle {
+  position:absolute; top:-22px; width:8px; height:22px;
+  background:var(--cyan); opacity:0.75; cursor:ew-resize;
+  border-radius:2px 2px 0 0; z-index:6; pointer-events:all; touch-action:none;
+}
+.loop-handle.out { background:var(--purple); }
+.loop-region {
+  position:absolute; top:-22px; height:22px;
+  background:rgba(38,198,218,0.13); pointer-events:none;
+}
+
+/* Waveform zoom bar */
+.zoom-bar {
+  display:flex; align-items:center; gap:5px; padding:2px 8px 2px 68px;
+  background:var(--bg-deep); border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.zoom-btn {
+  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+  width:22px; height:22px; border-radius:4px; cursor:pointer; font-size:14px;
+  display:flex; align-items:center; justify-content:center;
+}
+.zoom-btn:active { background:var(--surface3); }
+#zoomLabel { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text2); min-width:28px; text-align:center; }
+
+/* Spectrum analyzer */
+.spectrum-bar { height:34px; padding:0 2px; background:var(--bg-deep); flex-shrink:0; overflow:hidden; }
+#spectrumCanvas { width:100%; height:34px; display:block; }
+
 /* Bar-lock button */
 .t-barlock { font-size:10px; letter-spacing:1px; font-weight:700; min-width:34px; color:var(--text2); }
 .t-barlock.active { color:var(--fl-orange); border-color:var(--fl-orange); background:var(--fl-orange-dim); }
@@ -618,6 +658,7 @@ html, body {
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
     <div class="h-indicator"><div class="h-dot" id="saveDot"></div> DB</div>
     <div class="h-indicator"><div class="h-dot" id="bpmDot"></div> <span id="bpmDotLabel">—</span></div>
+    <div class="h-indicator"><div class="h-dot" id="midiDot"></div> MIDI</div>
     <button class="h-btn hidden" id="installBtn" onclick="promptInstall()" title="Uygulamayı Ana Ekrana Ekle">⬇</button>
     <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
     <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
@@ -629,6 +670,9 @@ html, body {
       <input type="file" id="beatFile" accept="audio/*" class="hidden" onchange="loadBeat(event)">
       <div class="beat-name-display" id="beatLabel">Beat yükle →</div>
       <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" oninput="E.beatGain.gain.value=this.value/100">
+      <button class="beat-upload" id="beatBtnB" onclick="document.getElementById('beatFileB').click()" style="flex-shrink:0;font-size:11px;padding:0 10px;">＋ B</button>
+      <input type="file" id="beatFileB" accept="audio/*" class="hidden" onchange="loadBeatB(event)">
+      <button class="beat-ab-btn" id="beatABBtn" onclick="switchBeatSlot()">A</button>
       <div class="beat-pitch-ctrl hidden" id="beatPitchCtrl">
         <button class="beat-pitch-btn" onclick="shiftBeatPitch(-1)" title="Yarı ton aşağı">♭</button>
         <span class="beat-pitch-lbl" id="beatPitchLbl">±0</span>
@@ -636,7 +680,19 @@ html, body {
       </div>
     </div>
 
-    <div class="timeline-ruler"><canvas class="ruler-canvas" id="rulerCanvas"></canvas></div>
+    <div class="timeline-ruler" id="timelineRuler"><canvas class="ruler-canvas" id="rulerCanvas"></canvas>
+      <div class="loop-handle-bar" id="loopHandleBar">
+        <div class="loop-region" id="loopRegion"></div>
+        <div class="loop-handle in" id="loopInHandle" title="Loop giriş"></div>
+        <div class="loop-handle out" id="loopOutHandle" title="Loop çıkış"></div>
+      </div>
+    </div>
+
+    <div class="zoom-bar">
+      <button class="zoom-btn" onclick="setZoom(E.waveZoom * 2)">+</button>
+      <span id="zoomLabel">1x</span>
+      <button class="zoom-btn" onclick="setZoom(E.waveZoom / 2)">-</button>
+    </div>
 
     <div class="take-lanes" id="takeLanes">
       <div class="playhead" id="playhead"></div>
@@ -672,6 +728,7 @@ html, body {
       </div>
       <span class="flow-meter-txt" id="flowMeterTxt">—</span>
     </div>
+    <div class="spectrum-bar"><canvas id="spectrumCanvas"></canvas></div>
   </div>
 
   <div class="transport">
@@ -913,9 +970,13 @@ const DB_META = 'meta';
 // ═══ ENGINE STATE ═══
 const E = {
   ctx: null,
-  beatBuf: null, beatSrc: null, beatGain: null,
+  beatBuf: null, beatBufB: null, beatSlot: 'A', beatSrc: null, beatGain: null,
   beatPlaying: false, beatStart: 0, beatOffset: 0,
   beatPitch: 0, // semitones (-12 … +12)
+  beatLoopIn: 0, beatLoopOut: 0,
+
+  waveZoom: 1.0, wavePan: 0.0,
+  midiAccess: null,
 
   micStream: null, micSrc: null, micGain: null,
   monitorGain: null, analyser: null, masterLimiter: null,
@@ -1169,6 +1230,7 @@ async function initAll(restoreTakes=false) {
 
     status.textContent = 'Mikrofon bağlanıyor...';
     await initMic();
+    initMIDI().catch(()=>{});
 
     status.textContent = 'FX engine kuruluyor...';
     initFX();
@@ -1186,7 +1248,10 @@ async function initAll(restoreTakes=false) {
     renderLanes();
     drawRuler();
     initRulerScrub();
+    initLoopHandles();
+    initZoomPan();
     startMeter();
+    startSpectrum();
     setupResizeObserver();
 
     if (restoreTakes) {
@@ -1744,6 +1809,36 @@ async function loadBeat(e) {
   } catch (err) { toast('Beat decode hatası', 'err'); }
 }
 
+async function loadBeatB(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const ab = await file.arrayBuffer();
+    E.beatBufB = await E.ctx.decodeAudioData(ab);
+    const name = file.name.replace(/\.[^.]+$/, '');
+    document.getElementById('beatBtnB').classList.add('loaded');
+    document.getElementById('beatBtnB').innerHTML = '♫ B';
+    const abBtn = document.getElementById('beatABBtn');
+    abBtn.classList.add('b-loaded');
+    toast(`✓ Beat B yüklendi: ${name}`, 'ok');
+  } catch (err) { toast('Beat B decode hatası', 'err'); }
+}
+
+function switchBeatSlot() {
+  const newSlot = E.beatSlot === 'A' ? 'B' : 'A';
+  if (newSlot === 'B' && !E.beatBufB) { toast('Önce Beat B yükle', 'warn'); return; }
+  const wasPlaying = E.beatPlaying;
+  const offset = wasPlaying ? _beatElapsedBufSec() % (activeBeatBuf()?.duration || 1) : E.beatOffset;
+  if (wasPlaying) { try { E.beatSrc.stop(); } catch(_){} E.beatSrc = null; E.beatPlaying = false; }
+  E.beatSlot = newSlot;
+  const abBtn = document.getElementById('beatABBtn');
+  abBtn.textContent = newSlot;
+  abBtn.classList.toggle('slot-b', newSlot === 'B');
+  E.beatOffset = offset % (activeBeatBuf()?.duration || 1);
+  if (wasPlaying) playBeat(E.beatOffset);
+  toast('Beat slot: ' + newSlot);
+}
+
 // ── Beat pitch shift ─────────────────────────────────────────────────────────
 function _beatPlaybackRate() {
   return Math.pow(2, E.beatPitch / 12);
@@ -1759,7 +1854,7 @@ function shiftBeatPitch(semitones) {
   if (next === E.beatPitch) return;
   // Capture current buffer position before changing rate
   const currentBufPos = E.beatPlaying
-    ? _beatElapsedBufSec() % E.beatBuf.duration
+    ? _beatElapsedBufSec() % (activeBeatBuf()?.duration || 1)
     : E.beatOffset;
   E.beatPitch = next;
   _updatePitchUI();
@@ -1780,22 +1875,28 @@ function _updatePitchUI() {
   lbl.style.color = st === 0 ? 'var(--text2)' : 'var(--fl-orange)';
 }
 
+function activeBeatBuf() {
+  return E.beatSlot === 'B' && E.beatBufB ? E.beatBufB : E.beatBuf;
+}
+
 function toggleBeat() {
-  if (!E.beatBuf) return;
+  if (!activeBeatBuf()) return;
   E.beatPlaying ? stopBeat() : playBeat();
 }
 
 function playBeat(offset) {
-  if (!E.beatBuf) return;
+  const buf = activeBeatBuf();
+  if (!buf) return;
   if (E.ctx.state === 'suspended') E.ctx.resume();
   E.beatSrc = E.ctx.createBufferSource();
-  E.beatSrc.buffer = E.beatBuf;
+  E.beatSrc.buffer = buf;
   E.beatSrc.loop = true;
+  E.beatSrc.loopStart = E.beatLoopIn;
+  E.beatSrc.loopEnd = E.beatLoopOut || buf.duration;
   E.beatSrc.playbackRate.value = _beatPlaybackRate();
   E.beatSrc.connect(E.beatGain);
   const o = offset ?? E.beatOffset;
   E.beatSrc.start(0, o);
-  // beatStart stores ctx time adjusted so elapsed * rate = buffer position
   E.beatStart = E.ctx.currentTime - o / _beatPlaybackRate();
   E.beatPlaying = true;
   document.getElementById('tBeatPlay').textContent = '⏸';
@@ -1805,8 +1906,9 @@ function playBeat(offset) {
 }
 
 function stopBeat() {
+  const buf = activeBeatBuf();
   if (E.beatSrc) {
-    E.beatOffset = _beatElapsedBufSec() % (E.beatBuf?.duration || 1);
+    E.beatOffset = _beatElapsedBufSec() % (buf?.duration || 1);
     try { E.beatSrc.stop(); } catch(e){}
     E.beatSrc = null;
   }
@@ -2140,7 +2242,10 @@ function drawLaneWaveform(idx) {
 
   const w = rect.width, h = rect.height;
   const data = t.buffer.getChannelData(0);
-  const step = Math.max(1, Math.ceil(data.length / Math.max(1, w)));
+  const zoom = Math.max(1, E.waveZoom);
+  const visibleSamples = Math.floor(data.length / zoom);
+  const startSample = Math.floor(E.wavePan * (data.length - visibleSamples));
+  const step = Math.max(1, Math.ceil(visibleSamples / Math.max(1, w)));
 
   const isSel = idx === E.selected;
   const baseColor = t.muted ? 'rgba(100,100,120,' :
@@ -2152,7 +2257,7 @@ function drawLaneWaveform(idx) {
   for (let i = 0; i < w; i++) {
     let min = 1, max = -1;
     for (let j = 0; j < step; j++) {
-      const v = data[i * step + j] || 0;
+      const v = data[startSample + i * step + j] || 0;
       if (v < min) min = v;
       if (v > max) max = v;
     }
@@ -3869,6 +3974,222 @@ function _showSwUpdateBanner() {
     '<button style="background:transparent;color:var(--text2);margin-left:4px;" ' +
       'onclick="this.parentElement.remove()">✕</button>';
   document.body.appendChild(el);
+}
+
+// ══ F6 — Spectrum Analyzer ═══════════════════════════════════════════════════
+let _spectrumRaf = null;
+
+function startSpectrum() {
+  if (_spectrumRaf) return;
+  const cvs = document.getElementById('spectrumCanvas');
+  if (!cvs || !E.analyser) return;
+  const ctx = cvs.getContext('2d');
+  const fftSize = 128;
+  E.analyser.fftSize = Math.max(E.analyser.fftSize, fftSize * 2);
+  const bufLen = fftSize;
+  const arr = new Uint8Array(bufLen);
+
+  function draw() {
+    _spectrumRaf = requestAnimationFrame(draw);
+    const dpr = window.devicePixelRatio || 1;
+    const w = cvs.parentElement.offsetWidth;
+    const h = 34;
+    if (cvs.width !== w * dpr) {
+      cvs.width = w * dpr; cvs.height = h * dpr;
+      cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    E.analyser.getByteFrequencyData(arr);
+    ctx.clearRect(0, 0, w, h);
+    const barW = w / bufLen;
+    for (let i = 0; i < bufLen; i++) {
+      const v = arr[i] / 255;
+      const barH = v * h;
+      const r = Math.round(v * 220 + 35);
+      const g = Math.round((1 - v) * 160 + 60);
+      ctx.fillStyle = `rgb(${r},${g},50)`;
+      ctx.fillRect(i * barW, h - barH, Math.max(1, barW - 1), barH);
+    }
+  }
+  draw();
+}
+
+// ══ F7 (already handled above via loadBeatB / switchBeatSlot) ══════════════
+
+// ══ F8 — Beat Loop Handles ═══════════════════════════════════════════════════
+function initLoopHandles() {
+  const ruler = document.getElementById('timelineRuler');
+  const inH = document.getElementById('loopInHandle');
+  const outH = document.getElementById('loopOutHandle');
+  const region = document.getElementById('loopRegion');
+  if (!ruler || !inH || !outH) return;
+
+  function getLoopX(sec) {
+    const w = ruler.offsetWidth;
+    const dur = activeBeatBuf()?.duration || 60;
+    const usableW = w - 64;
+    return 64 + (sec / dur) * usableW;
+  }
+
+  function updateHandlePositions() {
+    const buf = activeBeatBuf();
+    if (!buf) return;
+    const inX = getLoopX(E.beatLoopIn);
+    const outX = getLoopX(E.beatLoopOut || buf.duration);
+    inH.style.left = inX + 'px';
+    outH.style.left = (outX - 4) + 'px';
+    region.style.left = inX + 'px';
+    region.style.width = Math.max(0, outX - inX) + 'px';
+  }
+
+  function makeDrag(handle, isIn) {
+    function onMove(e) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const rect = ruler.getBoundingClientRect();
+      const x = Math.max(64, Math.min(rect.width, clientX - rect.left));
+      const dur = activeBeatBuf()?.duration || 60;
+      const sec = ((x - 64) / (rect.width - 64)) * dur;
+      if (isIn) {
+        E.beatLoopIn = Math.max(0, Math.min(sec, E.beatLoopOut || dur - 0.1));
+      } else {
+        E.beatLoopOut = Math.max(E.beatLoopIn + 0.1, Math.min(sec, dur));
+      }
+      if (E.beatSrc) {
+        E.beatSrc.loopStart = E.beatLoopIn;
+        E.beatSrc.loopEnd = E.beatLoopOut || dur;
+      }
+      updateHandlePositions();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    }
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    handle.addEventListener('touchstart', e => {
+      e.preventDefault();
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
+    }, { passive: false });
+  }
+
+  makeDrag(inH, true);
+  makeDrag(outH, false);
+
+  const ro = new ResizeObserver(() => updateHandlePositions());
+  ro.observe(ruler);
+}
+
+// ══ F9 — Waveform Zoom & Pan ═════════════════════════════════════════════════
+function setZoom(z) {
+  E.waveZoom = Math.max(1, Math.min(32, z));
+  if (E.waveZoom === 1) E.wavePan = 0;
+  document.getElementById('zoomLabel').textContent = E.waveZoom.toFixed(E.waveZoom < 2 ? 0 : 1) + 'x';
+  for (let i = 0; i < E.takes.length; i++) drawLaneWaveform(i);
+}
+
+function initZoomPan() {
+  const lanes = document.getElementById('takeLanes');
+  if (!lanes) return;
+
+  // Pinch-to-zoom
+  let _pinchDist = 0;
+  lanes.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      _pinchDist = Math.hypot(dx, dy);
+    }
+  }, { passive: true });
+
+  lanes.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (_pinchDist > 0) {
+        setZoom(E.waveZoom * (dist / _pinchDist));
+        _pinchDist = dist;
+      }
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // Horizontal pan (single finger, horizontal-dominant)
+  let _panStartX = null, _panStartPan = 0;
+  lanes.addEventListener('touchstart', e => {
+    if (e.touches.length === 1 && E.waveZoom > 1) {
+      _panStartX = e.touches[0].clientX;
+      _panStartPan = E.wavePan;
+    }
+  }, { passive: true });
+
+  lanes.addEventListener('touchmove', e => {
+    if (e.touches.length === 1 && E.waveZoom > 1 && _panStartX !== null) {
+      const dx = e.touches[0].clientX - _panStartX;
+      const w = lanes.offsetWidth || 1;
+      E.wavePan = Math.max(0, Math.min(1, _panStartPan - dx / w));
+      for (let i = 0; i < E.takes.length; i++) drawLaneWaveform(i);
+    }
+  }, { passive: true });
+
+  lanes.addEventListener('touchend', () => { _panStartX = null; });
+}
+
+// ══ F10 — MIDI Controller ════════════════════════════════════════════════════
+async function initMIDI() {
+  if (!navigator.requestMIDIAccess) return;
+  try {
+    const access = await navigator.requestMIDIAccess();
+    E.midiAccess = access;
+    const dot = document.getElementById('midiDot');
+    const updateDot = () => dot && dot.classList.toggle('on', access.inputs.size > 0);
+    access.inputs.forEach(i => { i.onmidimessage = handleMIDI; });
+    updateDot();
+    access.onstatechange = ev => {
+      if (ev.port.type === 'input' && ev.port.state === 'connected') {
+        ev.port.onmidimessage = handleMIDI;
+        toast('MIDI: ' + ev.port.name, 'ok');
+      }
+      updateDot();
+    };
+  } catch(e) { console.warn('[midi]', e); }
+}
+
+function handleMIDI({ data }) {
+  const [status, note, vel] = data;
+  if ((status & 0xF0) !== 0x90 || vel === 0) return;
+  if (note === 60) toggleRec();
+  if (note === 62) toggleBeat();
+  if (note === 64) stopAll();
+  if (note === 65) playSelected();
+}
+
+// ══ F11 — Gamepad / Shutter ══════════════════════════════════════════════════
+let _gpPrev = {};
+window.addEventListener('gamepadconnected', e => {
+  toast('Gamepad: ' + e.gamepad.id.slice(0, 24), 'ok');
+  _startGamepadPoll();
+});
+function _startGamepadPoll() {
+  function poll() {
+    const gp = navigator.getGamepads?.()[0];
+    if (!gp) return;
+    const b0 = gp.buttons[0]?.pressed;
+    const b1 = gp.buttons[1]?.pressed;
+    const b7 = gp.buttons[7]?.pressed;
+    if (b0 && !_gpPrev.b0) toggleRec();
+    if (b1 && !_gpPrev.b1) toggleBeat();
+    if (b7 && !_gpPrev.b7) toggleRec();
+    _gpPrev = { b0, b1, b7 };
+    requestAnimationFrame(poll);
+  }
+  requestAnimationFrame(poll);
 }
 
 // ── PWA: Install Prompt ──────────────────────────────────────────────────────
