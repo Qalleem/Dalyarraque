@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
 // Güncelleme: CACHE_VERSION artırılınca tüm eski cache silinir, yeni içerik yüklenir
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 
 const PRECACHE = [
