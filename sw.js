@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
-// Güncelleme: cache adını CACHE_VERSION ile artır
-const CACHE_VERSION = 'v5';
+// Güncelleme: CACHE_VERSION artırılınca tüm eski cache silinir, yeni içerik yüklenir
+const CACHE_VERSION = 'v6';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 
 const PRECACHE = [
@@ -11,40 +11,35 @@ const PRECACHE = [
   'https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js',
 ];
 
-// ── Install: App shell'i önceden cache'le ────────────────────────────────────
+// ── Install ──────────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
-  self.skipWaiting(); // Hemen aktif ol, eski SW'yi bekletme
+  self.skipWaiting(); // Beklemeden hemen devral — yeni SW anında aktif
   e.waitUntil(
     caches.open(CACHE).then(cache =>
-      // allSettled: tek hata tüm cache işlemini iptal etmez
       Promise.allSettled(PRECACHE.map(url => cache.add(url)))
     )
   );
 });
 
-// ── Activate: Eski cache'leri temizle ────────────────────────────────────────
+// ── Activate: Eski cache'leri sil, tüm tabları devral ────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys =>
-        Promise.all(
-          keys.filter(k => k !== CACHE).map(k => caches.delete(k))
-        )
-      )
-      .then(() => self.clients.claim()) // Tüm open tab'ları anında kontrol al
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
-// ── Fetch: 3 katmanlı caching stratejisi ────────────────────────────────────
+// ── Fetch ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
   const { request } = e;
-
-  // Yalnızca GET isteklerini yönet
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
 
-  // 1. CDN & Google Fonts → Cache-First (değişmez içerik)
+  // CDN & fonts → Cache-First (değişmez içerik)
   const isExternalStatic =
     url.hostname.endsWith('cdn.jsdelivr.net') ||
     url.hostname.endsWith('fonts.gstatic.com') ||
@@ -55,9 +50,7 @@ self.addEventListener('fetch', e => {
       caches.match(request).then(cached => {
         if (cached) return cached;
         return fetch(request).then(res => {
-          if (res.ok) {
-            caches.open(CACHE).then(c => c.put(request, res.clone()));
-          }
+          if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()));
           return res;
         });
       })
@@ -65,15 +58,11 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 2. App HTML & assets → Network-First, cache fallback
-  //    Güncellemeler anında kullanıcıya ulaşsın;
-  //    çevrimdışıysa cache'ten sun
+  // App dosyaları → Network-First (online'da her zaman taze, offline'da cache)
   e.respondWith(
-    fetch(request)
+    fetch(request, { cache: 'no-store' })
       .then(res => {
-        if (res.ok) {
-          caches.open(CACHE).then(c => c.put(request, res.clone()));
-        }
+        if (res.ok) caches.open(CACHE).then(c => c.put(request, res.clone()));
         return res;
       })
       .catch(() =>

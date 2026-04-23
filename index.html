@@ -3784,6 +3784,15 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('./sw.js');
+
+      // Yeni SW devralınca sayfayı otomatik yenile — kullanıcı tıklaması gerekmez
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        window.location.reload();
+      });
+
+      // Her yüklemede güncelleme kontrolü zorla
+      reg.update();
+
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         nw.addEventListener('statechange', () => {
