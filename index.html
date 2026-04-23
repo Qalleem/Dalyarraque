@@ -2312,10 +2312,12 @@ function toggleMute(i) {
 }
 function toggleSolo(i) {
   if (!E.takes[i]) return;
-  E.takes[i].soloed = !E.takes[i].soloed;
+  const already = E.takes[i].soloed;
+  E.takes.forEach(t => { if (t) t.soloed = false; }); // tümünü kapat
+  if (!already) E.takes[i].soloed = true;             // sadece bunu aç (toggle off ise kapalı kalır)
   markOneBreathDirty();
   renderLanes();
-  dbSaveTake(E.takes[i]);
+  E.takes.forEach(t => { if (t) dbSaveTake(t); });
 }
 
 function drawLaneWaveform(idx) {
