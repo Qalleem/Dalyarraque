@@ -284,7 +284,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 <div id="app" style="display:none;">
 
   <div class="header">
-    <div class="h-logo">QB <span>v7</span></div>
+    <div class="h-logo">QB <span>v8</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -3783,14 +3783,21 @@ window.addEventListener('DOMContentLoaded', preflightCheck);
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
-      const reg = await navigator.serviceWorker.register('./sw.js');
+      // updateViaCache:'none' → tarayıcı sw.js için HTTP cache kullanmaz,
+      // her seferinde sunucudan taze fetch eder. GitHub Pages max-age bypass.
+      const reg = await navigator.serviceWorker.register('./sw.js', {
+        updateViaCache: 'none'
+      });
 
-      // Yeni SW devralınca sayfayı otomatik yenile — kullanıcı tıklaması gerekmez
+      // controllerchange → otomatik reload (reload guard: sonsuz döngü engeli)
+      let _swReloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_swReloading) return;
+        _swReloading = true;
         window.location.reload();
       });
 
-      // Her yüklemede güncelleme kontrolü zorla
+      // Her yüklemede SW güncellemesi kontrol et
       reg.update();
 
       reg.addEventListener('updatefound', () => {

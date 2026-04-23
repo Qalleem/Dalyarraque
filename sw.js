@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
-// Güncelleme: CACHE_VERSION artırılınca tüm eski cache silinir, yeni içerik yüklenir
-const CACHE_VERSION = 'v7';
+// CACHE_VERSION değişince tüm eski cache silinir. Her deploy'da artır.
+const CACHE_VERSION = 'v8';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 
 const PRECACHE = [
@@ -11,9 +11,9 @@ const PRECACHE = [
   'https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js',
 ];
 
-// ── Install ──────────────────────────────────────────────────────────────────
+// ── Install: skipWaiting → bekleme yok, anında devral ────────────────────────
 self.addEventListener('install', e => {
-  self.skipWaiting(); // Beklemeden hemen devral — yeni SW anında aktif
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE).then(cache =>
       Promise.allSettled(PRECACHE.map(url => cache.add(url)))
@@ -21,7 +21,7 @@ self.addEventListener('install', e => {
   );
 });
 
-// ── Activate: Eski cache'leri sil, tüm tabları devral ────────────────────────
+// ── Activate: eski cache'leri sil, tüm tabları devral ────────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
@@ -39,13 +39,12 @@ self.addEventListener('fetch', e => {
 
   const url = new URL(request.url);
 
-  // CDN & fonts → Cache-First (değişmez içerik)
-  const isExternalStatic =
+  // CDN & Google Fonts → Cache-First (değişmez içerik, versiyon sabit)
+  if (
     url.hostname.endsWith('cdn.jsdelivr.net') ||
     url.hostname.endsWith('fonts.gstatic.com') ||
-    url.hostname.endsWith('fonts.googleapis.com');
-
-  if (isExternalStatic) {
+    url.hostname.endsWith('fonts.googleapis.com')
+  ) {
     e.respondWith(
       caches.match(request).then(cached => {
         if (cached) return cached;
@@ -58,7 +57,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // App dosyaları → Network-First (online'da her zaman taze, offline'da cache)
+  // App dosyaları → Network-First + HTTP cache bypass
+  // cache:'no-store' → GitHub Pages CDN veya tarayıcı cache'i atlar
   e.respondWith(
     fetch(request, { cache: 'no-store' })
       .then(res => {
