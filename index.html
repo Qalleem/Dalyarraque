@@ -1508,7 +1508,7 @@ function _updatePitchUI() {
   if (!lbl) return;
   const st = E.beatPitch;
   lbl.textContent = st === 0 ? '±0' : (st > 0 ? '+' + st : '' + st);
-  lbl.style.color = st === 0 ? 'var(--text2)' : 'var(--fl-orange)';
+  lbl.style.color = st === 0 ? 'var(--text2)' : 'var(--accent)';
 }
 
 function activeBeatBuf() {
@@ -1943,9 +1943,9 @@ function drawLaneWaveform(idx) {
   const step = Math.max(1, Math.ceil(visibleSamples / Math.max(1, w)));
 
   const isSel = idx === E.selected;
-  const baseColor = t.muted ? 'rgba(100,100,120,' :
-                     t.soloed ? 'rgba(38,198,218,' :
-                     isSel ? 'rgba(255,109,0,' : 'rgba(76,175,80,';
+  const baseColor = t.muted ? 'rgba(60,65,90,' :
+                     t.soloed ? 'rgba(0,200,248,' :
+                     isSel ? 'rgba(79,111,255,' : 'rgba(0,221,160,';
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = baseColor + '0.6)';
@@ -3331,20 +3331,20 @@ function drawRuler() {
   cvs.style.width = w + 'px'; cvs.style.height = h + 'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);
 
-  ctx.fillStyle = '#222228'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#0e0f16'; ctx.fillRect(0, 0, w, h);
   const dur = E.beatBuf?.duration || getOneBreathBuffer(false)?.duration || 60;
   const pxPerSec = (w - 64) / Math.max(1, dur);
 
-  ctx.fillStyle = '#555568';
+  ctx.fillStyle = '#2e3a58';
   ctx.font = '9px "IBM Plex Mono"';
   ctx.textAlign = 'center';
 
   for (let s = 0; s <= dur; s++) {
     const x = 64 + s * pxPerSec;
     if (s % 5 === 0) {
-      ctx.fillStyle = '#666678';
+      ctx.fillStyle = '#3d4e72';
       ctx.fillRect(x, 14, 1, 8);
-      ctx.fillStyle = '#555568';
+      ctx.fillStyle = '#2e3a58';
       ctx.fillText(fmtTime(s), x, 12);
     } else {
       ctx.fillRect(x, 18, 1, 4);
@@ -3647,8 +3647,8 @@ function drawBeatGrid(ctx2d, w, h, take) {
     const x = Math.round(t * pxPerSec);
     ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, h); ctx2d.stroke();
   }
-  // Bar lines (orange)
-  ctx2d.strokeStyle = 'rgba(255,109,0,0.38)';
+  // Bar lines (accent indigo)
+  ctx2d.strokeStyle = 'rgba(79,111,255,0.40)';
   ctx2d.lineWidth = 1.5;
   ctx2d.font = '8px "IBM Plex Mono", monospace';
   ctx2d.textAlign = 'left';
@@ -3657,7 +3657,7 @@ function drawBeatGrid(ctx2d, w, h, take) {
     const x = Math.round(t * pxPerSec);
     ctx2d.beginPath(); ctx2d.moveTo(x, 0); ctx2d.lineTo(x, h); ctx2d.stroke();
     if (x + 4 < w) {
-      ctx2d.fillStyle = 'rgba(255,109,0,0.45)';
+      ctx2d.fillStyle = 'rgba(79,111,255,0.55)';
       ctx2d.fillText(barNum, x + 2, h - 3);
     }
   }

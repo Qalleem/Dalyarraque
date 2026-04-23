@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
 // Güncelleme: cache adını CACHE_VERSION ile artır
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 
 const PRECACHE = [
