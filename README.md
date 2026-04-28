@@ -4,9 +4,11 @@
 
 ## 🔴 Canlı Uygulama
 
-**https://qalleem.github.io/Dalyarraque/**
+**https://dalyarraque.vercel.app/** *(birincil)*
 
-> Her `main` branch güncellemesi otomatik olarak bu adrese deploy edilir (GitHub Actions, ~1-2 dk).
+Yedek: https://qalleem.github.io/Dalyarraque/
+
+> Her `main` branch güncellemesi Vercel'e otomatik deploy edilir (~10–30 sn). GitHub Pages dual-host olarak yedek yayını sürdürür.
 
 ---
 
@@ -45,5 +47,8 @@ Web Audio API · MediaRecorder · AudioWorklet · IndexedDB · Service Worker (P
 Tüm uygulama tek dosya: `index.html`
 
 ```
-main branch → GitHub Actions → GitHub Pages (otomatik deploy)
+main branch → Vercel (birincil, ~10–30 sn)
+            → GitHub Actions → GitHub Pages (yedek)
 ```
+
+`vercel.json` ile `sw.js` ve `index.html` için `Cache-Control: no-store/no-cache` header'ları zorlanır → SW versiyon güncellemeleri anında yansır.
