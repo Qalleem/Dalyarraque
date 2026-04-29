@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>QVLLEN BOOTH v9</title>
+<title>QVLLEN BOOTH v10</title>
 <script src="https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
@@ -54,7 +54,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .timeline-ruler{height:22px;background:var(--surface);border-bottom:1px solid var(--border);position:relative;flex-shrink:0;overflow:hidden;}
 .ruler-canvas{width:100%;height:100%;}
 /* TAKE LANES */
-.take-lanes{flex:1;overflow-y:auto;overflow-x:hidden;background:var(--bg-deep);position:relative;}
+.take-lanes{flex:1;overflow-y:auto;overflow-x:hidden;background:var(--bg-deep);position:relative;touch-action:pan-y;-webkit-overflow-scrolling:touch;}
 .take-lanes::-webkit-scrollbar{display:none;}
 .take-lane{display:flex;height:68px;border-bottom:1px solid var(--border);position:relative;transition:background .18s;}
 .take-lane:active{background:rgba(79,111,255,0.04);}
@@ -160,7 +160,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 /* DRAWER */
 .drawer-overlay{position:fixed;inset:0;background:rgba(0,0,8,0.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:100;opacity:0;visibility:hidden;transition:all .3s;}
 .drawer-overlay.show{opacity:1;visibility:visible;}
-.drawer{position:fixed;bottom:0;left:0;right:0;background:rgba(10,11,17,0.97);border-radius:22px 22px 0 0;border-top:1px solid rgba(255,255,255,0.08);max-height:82vh;overflow-y:auto;z-index:101;transform:translateY(100%);transition:transform .32s cubic-bezier(.32,.72,0,1);padding:20px;backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);box-shadow:0 -8px 60px rgba(0,0,0,0.6);}
+.drawer{position:fixed;bottom:0;left:0;right:0;background:rgba(10,11,17,0.97);border-radius:22px 22px 0 0;border-top:1px solid rgba(255,255,255,0.08);max-height:82vh;overflow-y:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;z-index:101;transform:translateY(100%);transition:transform .32s cubic-bezier(.32,.72,0,1);padding:20px;backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);box-shadow:0 -8px 60px rgba(0,0,0,0.6);}
 .drawer.show{transform:translateY(0);}
 .drawer::-webkit-scrollbar{display:none;}
 .drawer-handle{width:44px;height:4px;border-radius:3px;background:rgba(255,255,255,0.12);margin:0 auto 18px;}
@@ -252,11 +252,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 #swUpdateBanner{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--accent);color:var(--text);padding:10px 18px;border-radius:var(--radius);z-index:9999;display:flex;align-items:center;gap:10px;font-size:13px;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,0.5),0 0 20px var(--accent-glow);}
 #swUpdateBanner button{background:var(--accent);color:#fff;border:0;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px;letter-spacing:0.3px;}
 
+/* a11y: klavye odak görünürlüğü — fare kullanıcısını rahatsız etmeden Tab navigasyonu görünür */
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role="button"]:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.beat-vol-mini:focus-visible,.fx-range:focus-visible{outline:2px solid var(--accent);outline-offset:4px;}
+
 </style>
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#1a1a1f">
+<meta name="theme-color" content="#07080c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -268,7 +272,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 <!-- ═══ SPLASH ═══ -->
 <div id="splashScreen">
   <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
-  <div class="splash-sub">MOBILE RECORDING STUDIO · v9</div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO · v10</div>
   <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
   <div class="splash-restore" id="splashRestore">
     <div>Önceki sesionda <b id="restoreCount">0</b> take bulundu.</div>
@@ -284,7 +288,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 <div id="app" style="display:none;">
 
   <div class="header">
-    <div class="h-logo">QB <span>v9</span></div>
+    <div class="h-logo">QB <span>v10</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -292,19 +296,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
     <div class="h-indicator"><div class="h-dot" id="bpmDot"></div> <span id="bpmDotLabel">—</span></div>
     <div class="h-indicator"><div class="h-dot" id="midiDot"></div> MIDI</div>
     <button class="h-btn hidden" id="installBtn" onclick="promptInstall()" title="Uygulamayı Ana Ekrana Ekle">⬇</button>
-    <button class="h-btn" onclick="openDrawer('fx')">⚡</button>
-    <button class="h-btn" onclick="openDrawer('settings')">⚙</button>
+    <button class="h-btn" onclick="openDrawer('fx')" aria-label="Efektler">⚡</button>
+    <button class="h-btn" onclick="openDrawer('settings')" aria-label="Ayarlar">⚙</button>
   </div>
 
   <div class="main-area">
     <div class="beat-bar">
-      <button class="beat-upload" id="beatBtn" onclick="document.getElementById('beatFile').click()">＋ Beat</button>
+      <button class="beat-upload" id="beatBtn" onclick="document.getElementById('beatFile').click()" aria-label="Beat yükle">＋ Beat</button>
       <input type="file" id="beatFile" accept="audio/*" class="hidden" onchange="loadBeat(event)">
       <div class="beat-name-display" id="beatLabel">Beat yükle →</div>
-      <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" oninput="E.beatGain.gain.value=this.value/100">
-      <button class="beat-upload" id="beatBtnB" onclick="document.getElementById('beatFileB').click()" style="flex-shrink:0;font-size:11px;padding:0 10px;">＋ B</button>
+      <input type="range" class="beat-vol-mini" min="0" max="100" value="80" id="beatVol" aria-label="Beat ses seviyesi" oninput="E.beatGain.gain.value=this.value/100">
+      <button class="beat-upload" id="beatBtnB" onclick="document.getElementById('beatFileB').click()" style="flex-shrink:0;font-size:11px;padding:0 10px;" aria-label="B beat yükle">＋ B</button>
       <input type="file" id="beatFileB" accept="audio/*" class="hidden" onchange="loadBeatB(event)">
-      <button class="beat-ab-btn" id="beatABBtn" onclick="switchBeatSlot()">A</button>
+      <button class="beat-ab-btn" id="beatABBtn" onclick="switchBeatSlot()" aria-label="Beat slot değiştir A/B">A</button>
       <div class="beat-pitch-ctrl hidden" id="beatPitchCtrl">
         <button class="beat-pitch-btn" onclick="shiftBeatPitch(-1)" title="Yarı ton aşağı">♭</button>
         <span class="beat-pitch-lbl" id="beatPitchLbl">±0</span>
@@ -503,7 +507,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
   </div>
 
   <div style="margin-top:10px;">
-    <button onclick="toggleMicDebug()" style="width:100%;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:'IBM Plex Mono';font-size:9px;letter-spacing:1px;cursor:pointer;">MIC / GATE DEBUG ▾</button>
+    <button onclick="toggleMicDebug()" aria-label="Mic ve gate debug panelini aç/kapat" style="width:100%;height:30px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text3);font-family:'IBM Plex Mono';font-size:9px;letter-spacing:1px;cursor:pointer;">MIC / GATE DEBUG ▾</button>
     <pre id="micDebugPre" style="display:none;margin-top:6px;padding:10px;background:var(--bg-deep);border-radius:6px;font-family:'IBM Plex Mono';font-size:9px;color:var(--cyan);line-height:1.6;white-space:pre-wrap;word-break:break-all;"></pre>
   </div>
 </div>
@@ -732,7 +736,6 @@ async function initGate() {
   });
   if (fxState.gate.on) buildFXChain();
   refreshMicDebug();
-  console.log('[gate] AudioWorklet true gate active');
 }
 
 // Locked FX defs per engineering memory
