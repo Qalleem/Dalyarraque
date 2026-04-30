@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>QVLLEN BOOTH v11</title>
+<title>QVLLEN BOOTH v12</title>
 <script src="https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
@@ -50,6 +50,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .beat-name-display{flex:1;font-family:'IBM Plex Mono';font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .beat-vol-mini{width:60px;height:3px;-webkit-appearance:none;appearance:none;background:var(--surface3);border-radius:2px;outline:none;}
 .beat-vol-mini::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--bg-deep);box-shadow:0 0 6px var(--accent-glow);}
+.lib-btn{padding:0 11px;font-size:14px;flex-shrink:0;border-style:solid;border-color:var(--border-light);}
+.lib-btn:active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+/* LIBRARY DRAWER */
+.lib-grid{display:flex;flex-direction:column;gap:10px;margin-top:8px;}
+.lib-card{display:flex;align-items:center;gap:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;transition:border-color .18s,background .18s;}
+.lib-card:active{background:var(--surface3);border-color:var(--accent);}
+.lib-cover{width:46px;height:46px;border-radius:9px;flex-shrink:0;background:linear-gradient(135deg,var(--accent) 0%,var(--purple) 100%);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:18px;color:#fff;letter-spacing:1px;text-shadow:0 1px 2px rgba(0,0,0,0.4);}
+.lib-info{flex:1;min-width:0;}
+.lib-title{font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lib-meta{font-family:'IBM Plex Mono';font-size:10px;color:var(--text2);margin-top:3px;letter-spacing:0.5px;}
+.lib-meta .free{color:var(--green);font-weight:600;}
+.lib-actions{display:flex;gap:6px;flex-shrink:0;}
+.lib-act{width:36px;height:36px;border-radius:8px;border:1px solid var(--border-light);background:transparent;color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none;transition:all .15s;}
+.lib-act.primary{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.lib-act:active{background:var(--surface3);transform:scale(0.94);}
+.lib-empty{padding:18px 12px;text-align:center;color:var(--text3);font-size:11px;font-family:'IBM Plex Mono';line-height:1.65;}
+.lib-empty b{color:var(--yellow);font-weight:600;}
 /* RULER */
 .timeline-ruler{height:22px;background:var(--surface);border-bottom:1px solid var(--border);position:relative;flex-shrink:0;overflow:hidden;}
 .ruler-canvas{width:100%;height:100%;}
@@ -272,7 +289,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <!-- ═══ SPLASH ═══ -->
 <div id="splashScreen">
   <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
-  <div class="splash-sub">MOBILE RECORDING STUDIO · v11</div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO · v12</div>
   <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
   <div class="splash-restore" id="splashRestore">
     <div>Önceki sesionda <b id="restoreCount">0</b> take bulundu.</div>
@@ -288,7 +305,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="app" style="display:none;">
 
   <div class="header">
-    <div class="h-logo">QB <span>v11</span></div>
+    <div class="h-logo">QB <span>v12</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -309,6 +326,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
       <button class="beat-upload" id="beatBtnB" onclick="document.getElementById('beatFileB').click()" style="flex-shrink:0;font-size:11px;padding:0 10px;" aria-label="B beat yükle">＋ B</button>
       <input type="file" id="beatFileB" accept="audio/*" class="hidden" onchange="loadBeatB(event)">
       <button class="beat-ab-btn" id="beatABBtn" onclick="switchBeatSlot()" aria-label="Beat slot değiştir A/B">A</button>
+      <button class="beat-upload lib-btn" onclick="openDrawer('library')" aria-label="Ücretsiz beat kütüphanesi" title="Ücretsiz Beat'ler">☰</button>
       <div class="beat-pitch-ctrl hidden" id="beatPitchCtrl">
         <button class="beat-pitch-btn" onclick="shiftBeatPitch(-1)" title="Yarı ton aşağı">♭</button>
         <span class="beat-pitch-lbl" id="beatPitchLbl">±0</span>
@@ -544,6 +562,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
   <div style="margin-top:8px; padding:8px; background:var(--bg-deep); border-radius:6px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.6;">
     Oluşturulan ses take listesine eklenir · AUTO açıksa geçiş otomatik analiz edilir · Export'a dahil olur
+  </div>
+</div>
+
+<!-- ═══ LIBRARY DRAWER ═══ -->
+<div class="drawer" id="libraryDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-title">ÜCRETSİZ BEAT'LER</div>
+  <div class="drawer-sub">Emine Type Beat · tıkla & flow'a başla</div>
+  <div class="lib-grid" id="libGrid"></div>
+  <div style="margin-top:14px; padding:10px; background:var(--bg-deep); border-radius:8px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.7;">
+    ⤓ slot A'ya yükler · ⬇ MP3 indir · İlk yüklemeden sonra offline çalışır
   </div>
 </div>
 
@@ -1425,27 +1454,80 @@ async function setInput(id) {
 }
 
 // ═══ BEAT ═══
+function _applyBeatBuffer(buf, name, opts = {}) {
+  E.beatBuf = buf;
+  document.getElementById('beatLabel').textContent = name;
+  document.getElementById('beatBtn').classList.add('loaded');
+  document.getElementById('beatBtn').innerHTML = '♫ Beat';
+  drawRuler();
+  const bpm = (opts.bpm != null) ? opts.bpm : detectBPM(buf);
+  document.getElementById('bpmInput').value = bpm;
+  document.getElementById('bpmDotLabel').textContent = bpm + ' BPM';
+  if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
+  E.beatPitch = 0;
+  _updatePitchUI();
+  document.getElementById('beatPitchCtrl').classList.remove('hidden');
+  toast(`✓ Beat yüklendi — ${bpm} BPM`, 'ok');
+}
+
 async function loadBeat(e) {
   const file = e.target.files[0];
   if (!file) return;
   try {
     const ab = await file.arrayBuffer();
-    E.beatBuf = await E.ctx.decodeAudioData(ab);
+    const buf = await E.ctx.decodeAudioData(ab);
     const name = file.name.replace(/\.[^.]+$/,'');
-    document.getElementById('beatLabel').textContent = name;
-    document.getElementById('beatBtn').classList.add('loaded');
-    document.getElementById('beatBtn').innerHTML = '♫ Beat';
-    drawRuler();
-    const detectedBpm = detectBPM(E.beatBuf);
-    document.getElementById('bpmInput').value = detectedBpm;
-    document.getElementById('bpmDotLabel').textContent = detectedBpm + ' BPM';
-    if (E.delay) E.delay.delayTime.setTargetAtTime(dottedEighthSec(), E.ctx.currentTime, 0.02);
-    // Reset pitch on new beat load, show pitch control
-    E.beatPitch = 0;
-    _updatePitchUI();
-    document.getElementById('beatPitchCtrl').classList.remove('hidden');
-    toast(`✓ Beat yüklendi — ${detectedBpm} BPM`, 'ok');
+    _applyBeatBuffer(buf, name);
   } catch (err) { toast('Beat decode hatası', 'err'); }
+}
+
+// ── Beat Library (ücretsiz Emine type beat'ler) ──────────────────────────────
+const BEAT_LIBRARY = [
+  { id:'etb1', title:'Emine Type Beat — Sessiz Şehir',     file:'assets/beats/emine-type-beat-1.mp3', bpm:92,  key:'Am' },
+  { id:'etb2', title:'Emine Type Beat — Yüksek Tansiyon',  file:'assets/beats/emine-type-beat-2.mp3', bpm:140, key:'Em' },
+  { id:'etb3', title:'Emine Type Beat — Geceyarısı',       file:'assets/beats/emine-type-beat-3.mp3', bpm:75,  key:'Cm' },
+  { id:'etb4', title:'Emine Type Beat — Gri Bulvar',       file:'assets/beats/emine-type-beat-4.mp3', bpm:128, key:'Gm' },
+  { id:'etb5', title:'Emine Type Beat — Sahil',            file:'assets/beats/emine-type-beat-5.mp3', bpm:100, key:'Dm' },
+];
+
+function renderLibrary() {
+  const grid = document.getElementById('libGrid');
+  if (!BEAT_LIBRARY.length) {
+    grid.innerHTML = `<div class="lib-empty">Henüz beat yok.<br><b>assets/beats/</b> klasörüne MP3 ekle.</div>`;
+    return;
+  }
+  grid.innerHTML = BEAT_LIBRARY.map(b => `
+    <div class="lib-card">
+      <div class="lib-cover">${b.key}</div>
+      <div class="lib-info">
+        <div class="lib-title">${b.title}</div>
+        <div class="lib-meta">${b.bpm} BPM · ${b.key} · <span class="free">ÜCRETSİZ</span></div>
+      </div>
+      <div class="lib-actions">
+        <a class="lib-act" href="${b.file}" download aria-label="MP3 indir" title="İndir">⬇</a>
+        <button class="lib-act primary" data-lib-load="${b.id}" onclick="loadLibBeat('${b.id}')" aria-label="Slot A'ya yükle" title="Yükle">⤓</button>
+      </div>
+    </div>`).join('');
+}
+
+async function loadLibBeat(id) {
+  const b = BEAT_LIBRARY.find(x => x.id === id);
+  if (!b) return;
+  const btn = document.querySelector(`[data-lib-load="${id}"]`);
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+  try {
+    const res = await fetch(b.file, { cache: 'force-cache' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ab = await res.arrayBuffer();
+    const buf = await E.ctx.decodeAudioData(ab);
+    _applyBeatBuffer(buf, b.title, { bpm: b.bpm });
+    closeDrawer();
+  } catch (err) {
+    toast('Beat indirilemedi — dosya henüz yüklenmemiş olabilir', 'err');
+  } finally {
+    if (btn) { btn.textContent = orig || '⤓'; btn.disabled = false; }
+  }
 }
 
 async function loadBeatB(e) {
@@ -3533,6 +3615,7 @@ function openDrawer(type) {
   document.getElementById('drawerOverlay').classList.add('show');
   document.getElementById(type + 'Drawer').classList.add('show');
   if (type === 'ai') loadElSettings();
+  if (type === 'library') renderLibrary();
 }
 function closeDrawer() {
   document.getElementById('drawerOverlay').classList.remove('show');

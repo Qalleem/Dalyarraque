@@ -1,7 +1,8 @@
 // QVLLEN BOOTH — Service Worker
 // CACHE_VERSION değişince tüm eski cache silinir. Her deploy'da artır.
-const CACHE_VERSION = 'v11';
+const CACHE_VERSION = 'v12';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
+const BEATS_CACHE = 'qvllen-beats-v1';
 
 const PRECACHE = [
   './',
@@ -26,7 +27,7 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE).map(k => caches.delete(k))
+        keys.filter(k => k !== CACHE && k !== BEATS_CACHE).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
@@ -38,6 +39,19 @@ self.addEventListener('fetch', e => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
+
+  // Beat library MP3'leri → Cache-First (lazy, immutable; precache'e dahil değil)
+  if (url.pathname.includes('/assets/beats/')) {
+    e.respondWith(
+      caches.open(BEATS_CACHE).then(cache =>
+        cache.match(request).then(cached => cached || fetch(request).then(res => {
+          if (res.ok) cache.put(request, res.clone());
+          return res;
+        }).catch(() => cached || Response.error()))
+      )
+    );
+    return;
+  }
 
   // CDN & Google Fonts → Cache-First (değişmez içerik, versiyon sabit)
   if (
