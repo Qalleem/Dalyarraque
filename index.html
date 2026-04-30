@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>QVLLEN BOOTH v12</title>
-<script src="https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js"></script>
+<title>QVLLEN BOOTH v13</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
 :root{--bg:#07080c;--bg-deep:#040508;--surface:#0e0f16;--surface2:#13141e;--surface3:#191b28;--surface4:#1f2235;--border:rgba(255,255,255,0.05);--border-light:rgba(255,255,255,0.10);--border-mid:rgba(255,255,255,0.07);--accent:#4f6fff;--accent-dim:rgba(79,111,255,0.12);--accent-glow:rgba(79,111,255,0.28);--accent-hi:#7b96ff;--rec-red:#ff3654;--rec-dim:rgba(255,54,84,0.09);--rec-glow:rgba(255,54,84,0.38);--green:#00dda0;--green-dim:rgba(0,221,160,0.09);--green-hi:#4dffc8;--yellow:#ffbe3f;--cyan:#00c8f8;--purple:#b47dff;--text:#eaedff;--text2:#606e98;--text3:#2e3a58;--text4:#182036;--radius:10px;--radius-lg:16px;}
@@ -289,7 +290,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <!-- ═══ SPLASH ═══ -->
 <div id="splashScreen">
   <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
-  <div class="splash-sub">MOBILE RECORDING STUDIO · v12</div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO · v13</div>
   <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
   <div class="splash-restore" id="splashRestore">
     <div>Önceki sesionda <b id="restoreCount">0</b> take bulundu.</div>
@@ -305,7 +306,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="app" style="display:none;">
 
   <div class="header">
-    <div class="h-logo">QB <span>v12</span></div>
+    <div class="h-logo">QB <span>v13</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -739,15 +740,20 @@ let _gateWorkletReady = false;
 
 async function loadGateWorklet(ctx) {
   if (!ctx?.audioWorklet) return false;
+  let createdUrl = null;
   try {
     if (!_gateWorkletUrl) {
-      _gateWorkletUrl = URL.createObjectURL(
+      createdUrl = URL.createObjectURL(
         new Blob([GATE_WORKLET_SRC], { type: 'application/javascript' })
       );
+      _gateWorkletUrl = createdUrl;
     }
     await ctx.audioWorklet.addModule(_gateWorkletUrl);
+    // Worklet module is now compiled+cached by the AudioContext; safe to revoke.
+    if (createdUrl) { URL.revokeObjectURL(createdUrl); _gateWorkletUrl = null; }
     return true;
   } catch (e) {
+    if (createdUrl) { URL.revokeObjectURL(createdUrl); _gateWorkletUrl = null; }
     console.warn('[gate] worklet load failed, compressor fallback:', e.message);
     return false;
   }
@@ -974,7 +980,10 @@ async function restoreSession() {
 }
 
 async function initMic(deviceId) {
-  if (E.micStream) E.micStream.getTracks().forEach(t => t.stop());
+  if (E.micStream) {
+    E.micStream.getTracks().forEach(t => { t.onended = null; t.stop(); });
+  }
+  if (E.micSrc) { try { E.micSrc.disconnect(); } catch(_){} E.micSrc = null; }
   E.micStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       deviceId: deviceId ? { exact: deviceId } : undefined,
@@ -985,14 +994,18 @@ async function initMic(deviceId) {
     }
   });
   E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
-  document.getElementById('micDot').classList.add('on');
+  const micDot = document.getElementById('micDot');
+  micDot.classList.remove('err');
+  micDot.classList.add('on');
   refreshMicDebug();
 
-  // Watchdog: if track ends (permission revoke), warn
-  E.micStream.getTracks().forEach(t => {
+  // Watchdog: if active track ends (permission revoke / device disconnect), warn
+  const activeStream = E.micStream;
+  activeStream.getTracks().forEach(t => {
     t.onended = () => {
-      document.getElementById('micDot').classList.remove('on');
-      document.getElementById('micDot').classList.add('err');
+      if (E.micStream !== activeStream) return; // stale handler — ignore
+      micDot.classList.remove('on');
+      micDot.classList.add('err');
       toast('⚠ Mic bağlantısı koptu — ayarlardan yeniden seç', 'err');
     };
   });
@@ -1013,8 +1026,22 @@ async function requestWakeLock() {
   catch(e) { console.warn('wakeLock', e); }
 }
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible') requestWakeLock();
+  if (document.visibilityState === 'visible') {
+    requestWakeLock();
+    // iOS Safari may suspend AudioContext when tab is backgrounded
+    if (E.ctx && E.ctx.state === 'suspended') E.ctx.resume().catch(()=>{});
+  }
 }
+
+// iOS Safari guard: a single pointer/touch gesture on the document resumes the
+// AudioContext if it has been auto-suspended (e.g. after returning from sleep,
+// or when audio routing changes mid-session). Idempotent + cheap.
+function _resumeCtxOnGesture() {
+  if (E.ctx && E.ctx.state === 'suspended') E.ctx.resume().catch(()=>{});
+}
+['pointerdown','touchstart','keydown'].forEach(ev =>
+  document.addEventListener(ev, _resumeCtxOnGesture, { passive: true, capture: true })
+);
 
 // ═══ FX INIT ═══
 function initFX() {
@@ -1471,7 +1498,8 @@ function _applyBeatBuffer(buf, name, opts = {}) {
 }
 
 async function loadBeat(e) {
-  const file = e.target.files[0];
+  const input = e.target;
+  const file = input.files[0];
   if (!file) return;
   try {
     const ab = await file.arrayBuffer();
@@ -1479,6 +1507,7 @@ async function loadBeat(e) {
     const name = file.name.replace(/\.[^.]+$/,'');
     _applyBeatBuffer(buf, name);
   } catch (err) { toast('Beat decode hatası', 'err'); }
+  finally { input.value = ''; }
 }
 
 // ── Beat Library (ücretsiz Emine type beat'ler) ──────────────────────────────
@@ -1490,6 +1519,8 @@ const BEAT_LIBRARY = [
   { id:'etb5', title:'Emine Type Beat — Sahil',            file:'assets/beats/emine-type-beat-5.mp3', bpm:100, key:'Dm' },
 ];
 
+const _esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
 function renderLibrary() {
   const grid = document.getElementById('libGrid');
   if (!BEAT_LIBRARY.length) {
@@ -1498,14 +1529,14 @@ function renderLibrary() {
   }
   grid.innerHTML = BEAT_LIBRARY.map(b => `
     <div class="lib-card">
-      <div class="lib-cover">${b.key}</div>
+      <div class="lib-cover">${_esc(b.key)}</div>
       <div class="lib-info">
-        <div class="lib-title">${b.title}</div>
-        <div class="lib-meta">${b.bpm} BPM · ${b.key} · <span class="free">ÜCRETSİZ</span></div>
+        <div class="lib-title">${_esc(b.title)}</div>
+        <div class="lib-meta">${_esc(b.bpm)} BPM · ${_esc(b.key)} · <span class="free">ÜCRETSİZ</span></div>
       </div>
       <div class="lib-actions">
-        <a class="lib-act" href="${b.file}" download aria-label="MP3 indir" title="İndir">⬇</a>
-        <button class="lib-act primary" data-lib-load="${b.id}" onclick="loadLibBeat('${b.id}')" aria-label="Slot A'ya yükle" title="Yükle">⤓</button>
+        <a class="lib-act" href="${encodeURI(b.file)}" download aria-label="MP3 indir" title="İndir">⬇</a>
+        <button class="lib-act primary" data-lib-load="${_esc(b.id)}" onclick="loadLibBeat('${_esc(b.id)}')" aria-label="Slot A'ya yükle" title="Yükle">⤓</button>
       </div>
     </div>`).join('');
 }
@@ -1531,7 +1562,8 @@ async function loadLibBeat(id) {
 }
 
 async function loadBeatB(e) {
-  const file = e.target.files[0];
+  const input = e.target;
+  const file = input.files[0];
   if (!file) return;
   try {
     const ab = await file.arrayBuffer();
@@ -1543,6 +1575,7 @@ async function loadBeatB(e) {
     abBtn.classList.add('b-loaded');
     toast(`✓ Beat B yüklendi: ${name}`, 'ok');
   } catch (err) { toast('Beat B decode hatası', 'err'); }
+  finally { input.value = ''; }
 }
 
 function switchBeatSlot() {

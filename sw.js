@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
 // CACHE_VERSION değişince tüm eski cache silinir. Her deploy'da artır.
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 const BEATS_CACHE = 'qvllen-beats-v1';
 
@@ -9,7 +9,6 @@ const PRECACHE = [
   './index.html',
   './manifest.json',
   './icon.svg',
-  'https://cdn.jsdelivr.net/npm/@msgpack/msgpack@3/dist/msgpack.min.js',
 ];
 
 // ── Install: skipWaiting → bekleme yok, anında devral ────────────────────────
