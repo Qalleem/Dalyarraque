@@ -1,6 +1,6 @@
 // QVLLEN BOOTH — Service Worker
 // CACHE_VERSION değişince tüm eski cache silinir. Her deploy'da artır.
-const CACHE_VERSION = 'v13';
+const CACHE_VERSION = 'v14';
 const CACHE = 'qvllen-booth-' + CACHE_VERSION;
 const BEATS_CACHE = 'qvllen-beats-v1';
 

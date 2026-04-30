@@ -2,7 +2,14 @@
   "mcpServers": {
     "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest", "--browser", "chromium", "--device", "Pixel 7", "--isolated"]
+      "args": [
+        "-y", "@playwright/mcp@latest",
+        "--browser", "chromium",
+        "--viewport-size", "393,852",
+        "--device-scale-factor", "2.75",
+        "--user-agent", "Mozilla/5.0 (Linux; Android 14; SM-A556B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        "--isolated"
+      ]
     }
   }
 }

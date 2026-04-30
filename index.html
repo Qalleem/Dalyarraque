@@ -2,8 +2,8 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>QVLLEN BOOTH v13</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>QVLLEN BOOTH v14</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -27,7 +27,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .splash-restore-btns{display:flex;gap:8px;margin-top:12px;justify-content:center;}
 /* APP + HEADER */
 #app{display:flex;flex-direction:column;height:100%;}
-.header{display:flex;align-items:center;height:50px;padding:0 16px;background:rgba(7,8,12,0.82);border-bottom:1px solid var(--border);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);flex-shrink:0;gap:10px;box-shadow:0 1px 0 rgba(255,255,255,0.03),0 4px 20px rgba(0,0,0,0.3);}
+.header{display:flex;align-items:center;min-height:50px;padding:env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));background:rgba(7,8,12,0.82);border-bottom:1px solid var(--border);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);flex-shrink:0;gap:10px;box-shadow:0 1px 0 rgba(255,255,255,0.03),0 4px 20px rgba(0,0,0,0.3);}
 .h-logo{font-family:'Bebas Neue';font-size:21px;letter-spacing:5px;color:var(--text);}
 .h-logo span{color:var(--accent);font-size:13px;margin-left:2px;font-family:'IBM Plex Mono';font-weight:600;letter-spacing:1px;}
 .h-spacer{flex:1;}
@@ -70,7 +70,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 .lib-empty b{color:var(--yellow);font-weight:600;}
 /* RULER */
 .timeline-ruler{height:22px;background:var(--surface);border-bottom:1px solid var(--border);position:relative;flex-shrink:0;overflow:hidden;}
-.ruler-canvas{width:100%;height:100%;}
+.ruler-canvas{width:100%;height:100%;touch-action:none;}
+#liveCanvas{touch-action:none;}
 /* TAKE LANES */
 .take-lanes{flex:1;overflow-y:auto;overflow-x:hidden;background:var(--bg-deep);position:relative;touch-action:pan-y;-webkit-overflow-scrolling:touch;}
 .take-lanes::-webkit-scrollbar{display:none;}
@@ -259,7 +260,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg-deep);color:var(--text
 #zoomLabel{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text2);min-width:28px;text-align:center;}
 /* SPECTRUM */
 .spectrum-bar{height:34px;padding:0 2px;background:var(--bg-deep);flex-shrink:0;overflow:hidden;}
-#spectrumCanvas{width:100%;height:34px;display:block;}
+#spectrumCanvas{width:100%;height:34px;display:block;touch-action:none;}
 /* BAR LOCK */
 .t-barlock{font-size:9px;letter-spacing:1.5px;font-weight:700;min-width:34px;color:var(--text2);font-family:'IBM Plex Mono';}
 .t-barlock.active{color:var(--accent);border-color:var(--accent);background:var(--accent-dim);box-shadow:0 0 12px var(--accent-glow);}
@@ -290,7 +291,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <!-- ═══ SPLASH ═══ -->
 <div id="splashScreen">
   <div class="splash-logo">QVLLEN <span>BOOTH</span></div>
-  <div class="splash-sub">MOBILE RECORDING STUDIO · v13</div>
+  <div class="splash-sub">MOBILE RECORDING STUDIO · v14</div>
   <button class="splash-btn" id="splashBtn" onclick="initAll()">🎤 BAŞLAT</button>
   <div class="splash-restore" id="splashRestore">
     <div>Önceki sesionda <b id="restoreCount">0</b> take bulundu.</div>
@@ -306,7 +307,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 <div id="app" style="display:none;">
 
   <div class="header">
-    <div class="h-logo">QB <span>v13</span></div>
+    <div class="h-logo">QB <span>v14</span></div>
     <div class="h-spacer"></div>
     <div class="h-indicator"><div class="h-dot" id="micDot"></div> MIC</div>
     <div class="h-indicator"><div class="h-dot" id="btDot"></div> OUT</div>
@@ -479,7 +480,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   <div class="s-row">
     <div><div class="s-label">Latency Comp (ms)</div><div class="s-desc">Hoparlör: 0 ms · Kulaklık/BT: cihaza göre (ör. 150 ms) — export'ta uygulanır</div></div>
     <div style="display:flex; gap:6px; align-items:center;">
-      <input class="s-input" type="number" value="150" id="latComp">
+      <input class="s-input" type="number" value="150" id="latComp" oninput="this.dataset.userSet='1'">
       <button class="s-btn primary" onclick="openCalibration()">Ölç</button>
     </div>
   </div>
@@ -896,11 +897,18 @@ async function initAll(restoreTakes=false) {
 
   try {
     status.textContent = 'Audio engine başlatılıyor...';
+    const requestedSr = parseInt(document.getElementById('srSelect').value);
     E.ctx = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: parseInt(document.getElementById('srSelect').value),
+      sampleRate: requestedSr,
       latencyHint: 'interactive',
     });
     if (E.ctx.state === 'suspended') await E.ctx.resume();
+    // Android Chrome may ignore sampleRate hint and use device default (often 48000).
+    // Downstream code keys off E.ctx.sampleRate so math stays correct; just inform user.
+    if (E.ctx.sampleRate !== requestedSr) {
+      console.warn('[audio] requested', requestedSr, 'got', E.ctx.sampleRate);
+      document.getElementById('srSelect').dataset.actual = E.ctx.sampleRate;
+    }
 
     status.textContent = 'Mikrofon bağlanıyor...';
     await initMic();
@@ -991,6 +999,7 @@ async function initMic(deviceId) {
       noiseSuppression: false,
       autoGainControl: false,
       sampleRate: parseInt(document.getElementById('srSelect').value),
+      channelCount: { ideal: 1 },
     }
   });
   E.micSrc = E.ctx.createMediaStreamSource(E.micStream);
@@ -1028,13 +1037,13 @@ async function requestWakeLock() {
 function onVisibilityChange() {
   if (document.visibilityState === 'visible') {
     requestWakeLock();
-    // iOS Safari may suspend AudioContext when tab is backgrounded
+    // Mobile browsers may suspend AudioContext when tab is backgrounded
     if (E.ctx && E.ctx.state === 'suspended') E.ctx.resume().catch(()=>{});
   }
 }
 
-// iOS Safari guard: a single pointer/touch gesture on the document resumes the
-// AudioContext if it has been auto-suspended (e.g. after returning from sleep,
+// Mobile gesture guard: a single pointer/touch gesture on the document resumes
+// the AudioContext if it has been auto-suspended (e.g. after returning from sleep,
 // or when audio routing changes mid-session). Idempotent + cheap.
 function _resumeCtxOnGesture() {
   if (E.ctx && E.ctx.state === 'suspended') E.ctx.resume().catch(()=>{});
@@ -1459,6 +1468,17 @@ async function enumDevices() {
     }
   });
   document.getElementById('btDot').classList.toggle('on', hasBT);
+
+  // Android BT typically introduces ~150 ms total loopback latency (40-80 ms each
+  // direction); iOS is ~50-100 ms. If user hasn't manually calibrated yet
+  // (no "user-set" flag) and BT is freshly detected, leave the existing default
+  // (already 150 ms in HTML) — this works well for Android. The click-loopback
+  // calibration in BT LATENCY ÖLÇ modal supersedes any heuristic.
+  const latInput = document.getElementById('latComp');
+  if (hasBT && latInput && !latInput.dataset.userSet && !latInput.dataset.calibrated) {
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    latInput.value = isAndroid ? 150 : 80;
+  }
 }
 
 async function setOutput(id) {
@@ -1511,13 +1531,9 @@ async function loadBeat(e) {
 }
 
 // ── Beat Library (ücretsiz Emine type beat'ler) ──────────────────────────────
-const BEAT_LIBRARY = [
-  { id:'etb1', title:'Emine Type Beat — Sessiz Şehir',     file:'assets/beats/emine-type-beat-1.mp3', bpm:92,  key:'Am' },
-  { id:'etb2', title:'Emine Type Beat — Yüksek Tansiyon',  file:'assets/beats/emine-type-beat-2.mp3', bpm:140, key:'Em' },
-  { id:'etb3', title:'Emine Type Beat — Geceyarısı',       file:'assets/beats/emine-type-beat-3.mp3', bpm:75,  key:'Cm' },
-  { id:'etb4', title:'Emine Type Beat — Gri Bulvar',       file:'assets/beats/emine-type-beat-4.mp3', bpm:128, key:'Gm' },
-  { id:'etb5', title:'Emine Type Beat — Sahil',            file:'assets/beats/emine-type-beat-5.mp3', bpm:100, key:'Dm' },
-];
+// MP3 dosyaları assets/beats/ klasörüne eklendiğinde bu listeye geri yüklenecek.
+// Boş array → renderLibrary "Henüz beat yok" empty-state'i gösterir; 404 toast yok.
+const BEAT_LIBRARY = [];
 
 const _esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -3588,7 +3604,9 @@ async function runCalibration() {
     val.textContent = ms + ' ms';
     val.classList.remove('hidden');
     body.textContent = `Bulunan gecikme: ${ms}ms. Ayarlar'a uygulandı.`;
-    document.getElementById('latComp').value = ms;
+    const latEl = document.getElementById('latComp');
+    latEl.value = ms;
+    latEl.dataset.calibrated = '1';
     startBtn.disabled = false;
   } catch (e) {
     body.textContent = 'Hata: ' + e.message;
@@ -3801,8 +3819,9 @@ function initRulerScrub() {
 
   cvs.addEventListener('click', e => { if (E.ctx) scrubAt(e.clientX); });
   cvs.addEventListener('touchstart', e => {
+    if (!E.ctx || e.touches.length !== 1) return; // don't block multi-touch / pre-init
     e.preventDefault();
-    if (E.ctx) scrubAt(e.touches[0].clientX);
+    scrubAt(e.touches[0].clientX);
   }, { passive: false });
 }
 
@@ -4162,10 +4181,14 @@ function _startGamepadPoll() {
 // ── PWA: Install Prompt ──────────────────────────────────────────────────────
 let _pwaPrompt = null;
 
+function _isStandalone() {
+  return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   _pwaPrompt = e;
-  document.getElementById('installBtn')?.classList.remove('hidden');
+  if (!_isStandalone()) document.getElementById('installBtn')?.classList.remove('hidden');
 });
 
 window.addEventListener('appinstalled', () => {
@@ -4174,13 +4197,26 @@ window.addEventListener('appinstalled', () => {
   toast('✓ QVLLEN ana ekrana eklendi', 'ok');
 });
 
+window.addEventListener('DOMContentLoaded', () => {
+  // App already installed → never show install button (avoids redundant prompts on Android)
+  if (_isStandalone()) document.getElementById('installBtn')?.classList.add('hidden');
+});
+
 function promptInstall() {
-  if (!_pwaPrompt) return;
+  if (!_pwaPrompt) {
+    toast('Chrome menüsünden "Ana ekrana ekle"', 'info');
+    return;
+  }
   _pwaPrompt.prompt();
   _pwaPrompt.userChoice.then(r => {
-    if (r.outcome === 'accepted') toast('✓ Yükleniyor...', 'ok');
-    _pwaPrompt = null;
-    document.getElementById('installBtn')?.classList.add('hidden');
+    if (r.outcome === 'accepted') {
+      toast('✓ Yükleniyor...', 'ok');
+      document.getElementById('installBtn')?.classList.add('hidden');
+      _pwaPrompt = null;
+    } else {
+      toast('İptal — istediğin zaman "Yükle" ile tekrar dene', 'info');
+      // Keep _pwaPrompt: Chrome reuses the deferred event for retries within the session.
+    }
   });
 }
 </script>
