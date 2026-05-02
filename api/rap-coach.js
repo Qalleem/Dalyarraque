@@ -21,7 +21,9 @@ export default async function handler(req, res) {
     });
   }
 
-  const safeMode = ['lyrics', 'flow', 'punchline', 'rhyme', 'one_breath'].includes(mode) ? mode : 'lyrics';
+  const allowedModes = new Set(['lyrics', 'flow', 'punchline', 'rhyme', 'one_breath']);
+  const safeMode = allowedModes.has(String(mode || '').trim()) ? String(mode).trim() : 'lyrics';
+  const trimmedText = String(text).trim();
 
   const systemPrompt = `Sen Türkçe rap koçusun. Kullanıcıya net, uygulanabilir ve motive edici geri bildirim ver.
 Her zaman TÜRKÇE yanıt ver.
@@ -42,12 +44,16 @@ Mutlaka uygulanabilir öneriler ver; genel geçer konuşma yapma.
 - 15 dakikalık mini çalışma planı.`;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${key}`
       },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'gpt-4.1-mini',
         temperature: 0.7,
@@ -55,11 +61,12 @@ Mutlaka uygulanabilir öneriler ver; genel geçer konuşma yapma.
           { role: 'system', content: systemPrompt },
           {
             role: 'user',
-            content: `Mod: ${safeMode}\n\nMetin/Not:\n${String(text).slice(0, 4000)}`
+            content: `Mod: ${safeMode}\n\nMetin/Not:\n${trimmedText.slice(0, 4000)}`
           }
         ]
       })
     });
+    clearTimeout(timeout);
 
     const data = await response.json().catch(() => ({}));
 
@@ -83,10 +90,13 @@ Mutlaka uygulanabilir öneriler ver; genel geçer konuşma yapma.
 
     return res.status(200).json({ ok: true, mode: safeMode, report });
   } catch (error) {
+    const isTimeout = error?.name === 'AbortError';
     return res.status(500).json({
       ok: false,
-      error: 'server_runtime_error',
-      message: 'Sunucu tarafında beklenmeyen bir hata oluştu.',
+      error: isTimeout ? 'upstream_timeout' : 'server_runtime_error',
+      message: isTimeout
+        ? 'OpenAI yanıt süresi aşıldı, lütfen tekrar deneyin.'
+        : 'Sunucu tarafında beklenmeyen bir hata oluştu.',
       detail: error?.message || String(error)
     });
   }
