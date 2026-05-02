@@ -513,6 +513,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   </div>
 
   <div style="margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+    <button class="s-btn" style="height:42px;border-radius:8px;background:rgba(0,200,248,0.12);border-color:var(--cyan);color:var(--cyan);" onclick="optimizeOneTakePro()">⚡ One Take Pro</button>
+    <button class="s-btn" style="height:42px;border-radius:8px;background:rgba(180,125,255,0.14);border-color:var(--purple);color:var(--purple);" onclick="applyFLStudioVocalPreset()">🎛 FL Studio Chain</button>
     <button class="s-btn success" style="height:42px;border-radius:8px;" onclick="exportAllTakes()">📦 Tüm Takes</button>
     <button class="s-btn primary" style="height:42px;border-radius:8px;" onclick="exportMix()">🎵 Mix WAV</button>
     <button class="s-btn" style="height:42px;border-radius:8px;background:rgba(171,71,188,0.15);border-color:var(--purple);color:var(--purple);" onclick="exportOneBreathStem()">🔥 OB Stem</button>
@@ -561,6 +563,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
     <button class="s-btn" onclick="closeDrawer()">Kapat</button>
   </div>
   <div class="ai-voice-status" id="elGenStatus"></div>
+
+  <div class="ai-section-title">RAP COACH (SUNUCU AI)</div>
+  <div class="ai-desc">OPENAI anahtarı tarayıcıya gelmez. Analiz için sadece /api/rap-coach kullanılır.</div>
+  <select class="s-select" id="rapCoachMode" style="width:100%;max-width:none;margin-bottom:8px;">
+    <option value="lyrics">lyrics</option>
+    <option value="flow">flow</option>
+    <option value="punchline">punchline</option>
+    <option value="rhyme">rhyme</option>
+    <option value="one_breath">one_breath</option>
+  </select>
+  <textarea class="ai-textarea" id="rapCoachText" placeholder="Sözlerini veya performans notunu yaz... (en iyi sonuç için 4-8 bar ekle)"></textarea>
+  <div class="ai-action-row">
+    <button class="s-btn" onclick="fillRapCoachExample()">Örnek Doldur</button>
+    <button class="s-btn" id="rapCoachBtn" onclick="runRapCoach()">Rap Coach</button>
+    <button class="s-btn" onclick="applyRapCoachSuggestions()">Öneriyi Uygula</button>
+  </div>
+  <div class="ai-voice-status" id="rapCoachStatus"></div>
+  <pre id="rapCoachResult" style="white-space:pre-wrap;background:var(--bg-deep);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:11px;color:var(--text2);max-height:180px;overflow:auto;"></pre>
+
 
   <div style="margin-top:8px; padding:8px; background:var(--bg-deep); border-radius:6px; font-family:'IBM Plex Mono'; font-size:9px; color:var(--text4); line-height:1.6;">
     Oluşturulan ses take listesine eklenir · AUTO açıksa geçiş otomatik analiz edilir · Export'a dahil olur
@@ -2166,14 +2187,15 @@ function playTakeWithTransition(idx) {
   stopOneBreathPlayback();
 
   if (E.takeSrc && E.playingTake >= 0) {
+    const oldSrc = E.takeSrc;
     const oldGain = E.takeGain;
     if (mode === 'xfade' && cfSec > 0 && oldGain) {
       oldGain.gain.setValueAtTime(oldGain.gain.value, now);
       oldGain.gain.linearRampToValueAtTime(0, now + cfSec);
-      setTimeout(() => { try { E.takeSrc.stop(); } catch(e){} }, cfSec * 1000 + 50);
+      setTimeout(() => { try { oldSrc.stop(); } catch(e){} }, cfSec * 1000 + 50);
       startTakePlay(idx, 0, cfSec);
     } else {
-      try { E.takeSrc.stop(); } catch(e){}
+      try { oldSrc.stop(); } catch(e){}
       startTakePlay(idx, 0, 0);
     }
   } else {
@@ -2211,7 +2233,7 @@ function startTakePlay(idx, startOffset, fadeInSec) {
   E.playingTake = idx;
   E.selected = idx;
   renderLanes();
-  showPlayhead(idx, buf.duration);
+  showPlayhead(idx, Math.max(0, buf.duration - startOffset));
 
   E.takeSrc.onended = () => {
     if (E.playingTake === idx) {
@@ -4218,6 +4240,135 @@ function promptInstall() {
       // Keep _pwaPrompt: Chrome reuses the deferred event for retries within the session.
     }
   });
+}
+function applyFLStudioVocalPreset() {
+  // Telefon mikrofonu için güvenli + FL Studio'ya taşımaya uygun başlangıç chain'i
+  const preset = {
+    hpf: { on: true,  val: 120 },
+    gate:{ on: true,  val: -50 },
+    comp:{ on: true,  val: 68 },
+    eq:  { on: true,  val: 4 },
+    deess:{on: true,  val: 46 },
+    sat: { on: true,  val: 22 },
+    parallel:{on:true,val: 28 },
+    air: { on: true,  val: 26 },
+    reverb:{on:false, val: 10 },
+    delay:{ on:false, val: 8 }
+  };
+
+  Object.keys(preset).forEach(k => {
+    if (!fxState[k]) return;
+    fxState[k].on = preset[k].on;
+    fxState[k].val = preset[k].val;
+  });
+
+  const vocalVol = document.getElementById('vocalVol');
+  const monitorVol = document.getElementById('monitorVol');
+  if (vocalVol) {
+    vocalVol.value = 112;
+    setVocalVol(vocalVol.value);
+  }
+  if (monitorVol) {
+    monitorVol.value = 0;
+    if (E.monitorGain) E.monitorGain.gain.value = 0;
+  }
+
+  renderFXGrid();
+  buildFXChain();
+  toast('🎛 FL Studio Chain aktif: dry/clean kayıt + kontrollü işlem', 'ok');
+}
+
+function optimizeOneTakePro() {
+  // One-take için düşük riskli, hızlı preset
+  setCf('tight');
+  const cfMs = document.getElementById('cfMs');
+  const preRoll = document.getElementById('preRoll');
+  const loopBars = document.getElementById('loopBars');
+  const vocalVol = document.getElementById('vocalVol');
+  const monitorVol = document.getElementById('monitorVol');
+
+  if (cfMs) cfMs.value = 45;
+  if (preRoll) preRoll.value = '1';
+  if (loopBars) loopBars.value = '4';
+  if (vocalVol) {
+    vocalVol.value = 108;
+    setVocalVol(vocalVol.value);
+  }
+  if (monitorVol) {
+    monitorVol.value = 0;
+    if (E.monitorGain) E.monitorGain.gain.value = 0;
+  }
+
+  if (!E.autoTransition) toggleAutoTransition();
+  toast('⚡ One Take Pro aktif: TIGHT + AUTO + 45ms + 1 bar preroll + 4 bar loop', 'ok');
+}
+
+function fillRapCoachExample() {
+  const textEl = document.getElementById('rapCoachText');
+  if (!textEl) return;
+  textEl.value = `Kafamın içi duman yine geceler uzun
+Sokaklar konuşuyor ama ben hep suskun
+Kalbimde metronom, dilimde ağır yük
+Ritim düşse de düşmem, bu benim yürüyüşüm`;
+}
+
+function applyRapCoachSuggestions() {
+  const resultEl = document.getElementById('rapCoachResult');
+  const textEl = document.getElementById('rapCoachText');
+  const out = (resultEl?.textContent || '').trim();
+  if (!out) return toast('Önce Rap Coach sonucu üret', 'err');
+  const marker = 'Daha iyi alternatif satırlar';
+  const idx = out.toLowerCase().indexOf(marker.toLowerCase());
+  if (idx === -1) return toast('Alternatif satır bulunamadı', 'err');
+  const sliced = out.slice(idx).split('\n').slice(1, 7).join('\n').trim();
+  if (!sliced) return toast('Uygulanacak öneri bulunamadı', 'err');
+  textEl.value = sliced;
+  toast('Öneriler metin alanına aktarıldı', 'ok');
+}
+
+async function runRapCoach() {
+  const textEl = document.getElementById('rapCoachText');
+  const modeEl = document.getElementById('rapCoachMode');
+  const statusEl = document.getElementById('rapCoachStatus');
+  const resultEl = document.getElementById('rapCoachResult');
+  const btn = document.getElementById('rapCoachBtn');
+
+  const text = (textEl?.value || '').trim();
+  const mode = modeEl?.value || 'lyrics';
+
+  if (!text) {
+    statusEl.textContent = '⚠ Lütfen analiz için bir metin gir.';
+    statusEl.className = 'ai-voice-status err';
+    return;
+  }
+
+  statusEl.textContent = 'Analiz hazırlanıyor...';
+  statusEl.className = 'ai-voice-status';
+  resultEl.textContent = '';
+  if (btn) btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/rap-coach', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, mode })
+    });
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok || !data?.ok) {
+      throw new Error(data?.message || data?.error || ('HTTP ' + r.status));
+    }
+
+    statusEl.textContent = '✓ Rap koçluğu hazır';
+    statusEl.className = 'ai-voice-status ok';
+    resultEl.textContent = data.report || '';
+  } catch (e) {
+    statusEl.textContent = '✗ ' + (e?.message || 'İstek başarısız');
+    statusEl.className = 'ai-voice-status err';
+    resultEl.textContent = '';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 </script>
 </body>
