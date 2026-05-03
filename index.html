@@ -1039,6 +1039,9 @@ function onVisibilityChange() {
     requestWakeLock();
     // Mobile browsers may suspend AudioContext when tab is backgrounded
     if (E.ctx && E.ctx.state === 'suspended') E.ctx.resume().catch(()=>{});
+  } else if (document.visibilityState === 'hidden' && E.recording) {
+    // Do NOT pause/resume MediaRecorder — would invalidate beatOffset sync.
+    toast('Kayıt sırasında sekmeyi arka plana atma — senkron bozulabilir.', 'warn');
   }
 }
 
@@ -1769,11 +1772,20 @@ async function startRec() {
   const mime = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || '';
   if (!mime) { toast('MediaRecorder desteklenmiyor', 'err'); return; }
 
-  try {
-    E.recorder = new MediaRecorder(E.micStream, mime ? { mimeType: mime } : {});
-  } catch(e) {
-    toast('MediaRecorder hatası', 'err');
-    return;
+  // Try high-quality bitrate first; fall back step by step for Safari/mobile.
+  E.recorder = null;
+  const tryConstruct = (opts) => {
+    try { E.recorder = new MediaRecorder(E.micStream, opts); return true; }
+    catch (_) { return false; }
+  };
+  const hqOpts = mime ? { mimeType: mime, audioBitsPerSecond: 192000 } : { audioBitsPerSecond: 192000 };
+  if (!tryConstruct(hqOpts)) {
+    if (!tryConstruct(mime ? { mimeType: mime } : {})) {
+      if (!tryConstruct(undefined)) {
+        toast('MediaRecorder hatası', 'err');
+        return;
+      }
+    }
   }
   E.recChunks = [];
   E.recWarmupSec = 0;
@@ -1865,16 +1877,32 @@ async function finishTake(mime) {
     markOneBreathDirty();
     drawLaneWaveform(idx);
 
-    // Auto-transition analysis: after 2nd+ take, find best join effect
+    // Auto-transition analysis: after 2nd+ take, find best join effect.
+    // Yield once before heavy analysis so UI doesn't freeze on mobile.
     if (E.autoTransition && idx >= 1) {
       const prev = E.takes[idx - 1];
       if (prev?.buffer) {
+        await new Promise(resolve => {
+          if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(() => resolve(), { timeout: 120 });
+          } else {
+            setTimeout(resolve, 0);
+          }
+        });
         const result = analyzeTransitionBoundary(prev, take, E.ctx.sampleRate);
         applyAutoTransition(result, idx);
       }
     }
   } catch (e) {
     toast('Decode hatası take ' + (idx+1), 'err');
+    // Ghost take guard: drop the failed take so no empty lane remains.
+    const removeIdx = E.takes.indexOf(take);
+    if (removeIdx !== -1) E.takes.splice(removeIdx, 1);
+    markOneBreathDirty();
+    if (E.selected >= E.takes.length) E.selected = Math.max(0, E.takes.length - 1);
+    renderLanes();
+    updateInfo();
+    return;
   }
 
   E.selected = idx;
@@ -2138,6 +2166,8 @@ function setupResizeObserver() {
   if (typeof ResizeObserver === 'undefined') return;
   const ro = new ResizeObserver(debounce(() => {
     drawRuler();
+    // Skip per-lane waveform redraw while actively recording — keeps mobile stable.
+    if (E.recording) return;
     for (let i = 0; i < E.takes.length; i++) drawLaneWaveform(i);
   }, 120));
   ro.observe(document.getElementById('takeLanes'));
